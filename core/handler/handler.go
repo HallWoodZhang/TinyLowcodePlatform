@@ -10,7 +10,8 @@ import (
 )
 
 type Handler struct {
-	DB *db.DB
+	Store  db.ScriptStore
+	Runner runtime.Runner
 }
 
 type createReq struct {
@@ -28,7 +29,7 @@ type updateReq struct {
 }
 
 func (h *Handler) ListScripts(w http.ResponseWriter, r *http.Request) {
-	scripts, err := h.DB.ListScripts()
+	scripts, err := h.Store.List()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -49,7 +50,7 @@ func (h *Handler) CreateScript(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and label are required"})
 		return
 	}
-	script, err := h.DB.CreateScript(req.Name, req.Label, req.Type, req.TSCode)
+	script, err := h.Store.Create(req.Name, req.Label, req.Type, req.TSCode)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -63,7 +64,7 @@ func (h *Handler) GetScript(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	script, err := h.DB.GetScript(id)
+	script, err := h.Store.Get(id)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "script not found"})
 		return
@@ -82,7 +83,7 @@ func (h *Handler) UpdateScript(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
-	script, err := h.DB.UpdateScript(id, req.Name, req.Label, req.Type, req.TSCode)
+	script, err := h.Store.Update(id, req.Name, req.Label, req.Type, req.TSCode)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -96,7 +97,7 @@ func (h *Handler) DeleteScript(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	if err := h.DB.DeleteScript(id); err != nil {
+	if err := h.Store.Delete(id); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -109,12 +110,12 @@ func (h *Handler) RunScript(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	script, err := h.DB.GetScript(id)
+	script, err := h.Store.Get(id)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "script not found"})
 		return
 	}
-	result := runtime.RunTSCode(script.TSCode, 10000)
+	result := h.Runner.Run(script.TSCode, 10000)
 	writeJSON(w, http.StatusOK, result)
 }
 

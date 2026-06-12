@@ -9,6 +9,7 @@ import (
 	"toy-platform/core/config"
 	"toy-platform/core/db"
 	"toy-platform/core/handler"
+	"toy-platform/core/runtime"
 )
 
 //go:embed static/*
@@ -17,13 +18,16 @@ var staticFiles embed.FS
 func main() {
 	cfg := config.Load("cmd/ts-quickjs/conf/config.json", "TS_HOST", "TS_PORT", "127.0.0.1", "9720")
 
-	db, err := db.New("scripts.db")
+	database, err := db.New("scripts.db")
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer database.Close()
 
-	h := &handler.Handler{DB: db}
+	h := &handler.Handler{
+		Store:  database,
+		Runner: &runtime.Engine{},
+	}
 
 	mux := http.NewServeMux()
 

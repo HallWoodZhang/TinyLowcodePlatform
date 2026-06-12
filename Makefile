@@ -64,3 +64,24 @@ lint:
 
 test:
 	go test ./...
+
+COVER_PKGS := ./core/config/... ./core/handler/...
+COVER_OUT  := coverage.out
+COVER_HTML := coverage.html
+
+cover:
+	go test -coverprofile=$(COVER_OUT) $(COVER_PKGS)
+	go tool cover -func=$(COVER_OUT) | tail -1
+	@echo ""
+	@echo "Coverage report → $(COVER_HTML)"
+	go tool cover -html=$(COVER_OUT) -o $(COVER_HTML)
+
+cover-summary:
+	go test -coverprofile=$(COVER_OUT) $(COVER_PKGS)
+	@echo ""
+	@echo "==================== Coverage Summary ===================="
+	@go tool cover -func=$(COVER_OUT) | awk ' \
+		/total:/ { printf "\n  TOTAL: %s\n\n", $$3 } \
+		!/total:/ && !/^_/ { printf "  %-50s %s\n", $$1, $$3 }'
+	@echo "=========================================================="
+	@rm -f $(COVER_OUT)

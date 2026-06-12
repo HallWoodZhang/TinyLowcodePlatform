@@ -38,6 +38,14 @@ type ScriptSummary struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type ScriptStore interface {
+	List() ([]ScriptSummary, error)
+	Get(id int64) (*Script, error)
+	Create(name, label, scriptType, tsCode string) (*Script, error)
+	Update(id int64, name, label, scriptType, tsCode *string) (*Script, error)
+	Delete(id int64) error
+}
+
 type DB struct {
 	*sql.DB
 }
@@ -132,7 +140,7 @@ func migrate(db *sql.DB) error {
 	return nil
 }
 
-func (d *DB) ListScripts() ([]ScriptSummary, error) {
+func (d *DB) List() ([]ScriptSummary, error) {
 	rows, err := d.Query(`SELECT id, name, label, type, created_at, updated_at FROM scripts ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
@@ -149,7 +157,7 @@ func (d *DB) ListScripts() ([]ScriptSummary, error) {
 	return scripts, rows.Err()
 }
 
-func (d *DB) GetScript(id int64) (*Script, error) {
+func (d *DB) Get(id int64) (*Script, error) {
 	var s Script
 	err := d.QueryRow(`SELECT id, name, label, type, ts_code, created_at, updated_at FROM scripts WHERE id = ?`, id).
 		Scan(&s.ID, &s.Name, &s.Label, &s.Type, &s.TSCode, &s.CreatedAt, &s.UpdatedAt)
@@ -159,16 +167,16 @@ func (d *DB) GetScript(id int64) (*Script, error) {
 	return &s, nil
 }
 
-func (d *DB) CreateScript(name, label, scriptType, tsCode string) (*Script, error) {
+func (d *DB) Create(name, label, scriptType, tsCode string) (*Script, error) {
 	id := idgen.Generate().Int64()
 	_, err := d.Exec(`INSERT INTO scripts (id, name, label, type, ts_code) VALUES (?, ?, ?, ?, ?)`, id, name, label, scriptType, tsCode)
 	if err != nil {
 		return nil, err
 	}
-	return d.GetScript(id)
+	return d.Get(id)
 }
 
-func (d *DB) UpdateScript(id int64, name, label, scriptType, tsCode *string) (*Script, error) {
+func (d *DB) Update(id int64, name, label, scriptType, tsCode *string) (*Script, error) {
 	if name != nil {
 		_, err := d.Exec(`UPDATE scripts SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, *name, id)
 		if err != nil {
@@ -193,10 +201,10 @@ func (d *DB) UpdateScript(id int64, name, label, scriptType, tsCode *string) (*S
 			return nil, err
 		}
 	}
-	return d.GetScript(id)
+	return d.Get(id)
 }
 
-func (d *DB) DeleteScript(id int64) error {
+func (d *DB) Delete(id int64) error {
 	_, err := d.Exec(`DELETE FROM scripts WHERE id = ?`, id)
 	return err
 }

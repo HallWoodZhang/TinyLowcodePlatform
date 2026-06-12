@@ -10,8 +10,13 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+type SqlStore interface {
+	ListTables() ([]string, error)
+	Query(sql string) (columns []string, rows [][]any, err error)
+}
+
 type SqlHandler struct {
-	roDB *sql.DB
+	Store SqlStore
 }
 
 type sqlRunReq struct {
@@ -25,23 +30,26 @@ type sqlRunResp struct {
 	Error    string   `json:"error,omitempty"`
 }
 
-func NewSqlHandler(dbPath string) (*SqlHandler, error) {
-	roDB, err := sql.Open("sqlite", dbPath+"?_busy_timeout=5000")
-	if err != nil {
-		return nil, err
-	}
-	if _, err := roDB.Exec("PRAGMA query_only = ON"); err != nil {
-		roDB.Close()
-		return nil, err
-	}
-	return &SqlHandler{roDB: roDB}, nil
+type sqliteStore struct {
+	db *sql.DB
 }
 
-func (h *SqlHandler) ListTables(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.roDB.Query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+func NewSqlHandler(dbPath string) (*SqlHandler, error) {
+	db, err := sql.Open("sqlite", dbPath+"?_busy_timeout=5000")
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+		return nil, err
+	}
+	if _, err := db.Exec("PRAGMA query_only = ON"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return &SqlHandler{Store: &sqliteStore{db: db}}, nil
+}
+
+func (s *sqliteStore) ListTables() ([]string, error) {
+	rows, err := s.db.Query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+	if err != nil {
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -49,13 +57,59 @@ func (h *SqlHandler) ListTables(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
+			return nil, err
 		}
 		tables = append(tables, name)
 	}
 	if tables == nil {
 		tables = []string{}
+	}
+	return tables, rows.Err()
+}
+
+func (s *sqliteStore) Query(sqlText string) ([]string, [][]any, error) {
+	rows, err := s.db.Query(sqlText)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var resultRows [][]any
+	for rows.Next() {
+		values := make([]any, len(columns))
+		ptrs := make([]any, len(columns))
+		for i := range values {
+			ptrs[i] = &values[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			return nil, nil, err
+		}
+		for i, v := range values {
+			switch t := v.(type) {
+			case []byte:
+				values[i] = string(t)
+			case int64:
+				values[i] = fmt.Sprintf("%d", t)
+			}
+		}
+		resultRows = append(resultRows, values)
+	}
+	if resultRows == nil {
+		resultRows = [][]any{}
+	}
+	return columns, resultRows, rows.Err()
+}
+
+func (h *SqlHandler) ListTables(w http.ResponseWriter, r *http.Request) {
+	tables, err := h.Store.ListTables()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
 	}
 	writeJSON(w, http.StatusOK, tables)
 }
@@ -85,53 +139,15 @@ func (h *SqlHandler) RunSQL(w http.ResponseWriter, r *http.Request) {
 		strings.HasPrefix(upper, "WITH")
 
 	if isQuery {
-		rows, err := h.roDB.Query(sqlText)
+		columns, rows, err := h.Store.Query(sqlText)
 		if err != nil {
 			writeJSON(w, http.StatusOK, sqlRunResp{Error: err.Error()})
 			return
 		}
-		defer rows.Close()
-
-		columns, err := rows.Columns()
-		if err != nil {
-			writeJSON(w, http.StatusOK, sqlRunResp{Error: err.Error()})
-			return
-		}
-
-		var resultRows [][]any
-		for rows.Next() {
-			values := make([]any, len(columns))
-			ptrs := make([]any, len(columns))
-			for i := range values {
-				ptrs[i] = &values[i]
-			}
-			if err := rows.Scan(ptrs...); err != nil {
-				writeJSON(w, http.StatusOK, sqlRunResp{Error: err.Error()})
-				return
-			}
-		for i, v := range values {
-			switch t := v.(type) {
-			case []byte:
-				values[i] = string(t)
-			case int64:
-				values[i] = fmt.Sprintf("%d", t)
-			}
-		}
-			resultRows = append(resultRows, values)
-		}
-		if err := rows.Err(); err != nil {
-			writeJSON(w, http.StatusOK, sqlRunResp{Error: err.Error()})
-			return
-		}
-
-		if resultRows == nil {
-			resultRows = [][]any{}
-		}
-
 		writeJSON(w, http.StatusOK, sqlRunResp{
 			Columns:  columns,
-			Rows:     resultRows,
-			RowCount: len(resultRows),
+			Rows:     rows,
+			RowCount: len(rows),
 		})
 	} else {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only SELECT, EXPLAIN, and WITH statements are allowed"})

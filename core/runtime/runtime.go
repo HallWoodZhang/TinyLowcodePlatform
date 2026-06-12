@@ -15,7 +15,13 @@ type RunResult struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func RunTSCode(tsCode string, timeoutMs int64) RunResult {
+type Runner interface {
+	Run(tsCode string, timeoutMs int64) RunResult
+}
+
+type Engine struct{}
+
+func (e *Engine) Run(tsCode string, timeoutMs int64) RunResult {
 	transformResult := api.Transform(tsCode, api.TransformOptions{
 		Loader: api.LoaderTS,
 		Format: api.FormatCommonJS,
