@@ -118,6 +118,7 @@ func TraceMiddleware(log Logger) func(http.Handler) http.Handler {
 			ctx := context.WithValue(r.Context(), traceKey, traceID)
 			r = r.WithContext(ctx)
 			w.Header().Set("X-Trace-ID", traceID)
+			log.Debug(ctx, "%s %s", r.Method, r.URL.Path)
 			next.ServeHTTP(w, r)
 		})
 	}
