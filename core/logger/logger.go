@@ -1,19 +1,26 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/google/uuid"
 )
 
+type contextKey string
+
+const traceKey contextKey = "traceID"
+
 type Logger interface {
-	Debug(msg string, args ...any)
-	Info(msg string, args ...any)
-	Warn(msg string, args ...any)
-	Error(msg string, args ...any)
+	Debug(ctx context.Context, msg string, args ...any)
+	Info(ctx context.Context, msg string, args ...any)
+	Warn(ctx context.Context, msg string, args ...any)
+	Error(ctx context.Context, msg string, args ...any)
 }
 
 type Loggers struct {
@@ -26,10 +33,23 @@ type slogAdapter struct {
 	logger *slog.Logger
 }
 
-func (a *slogAdapter) Debug(msg string, args ...any) { a.logger.Debug(fmt.Sprintf(msg, args...)) }
-func (a *slogAdapter) Info(msg string, args ...any)  { a.logger.Info(fmt.Sprintf(msg, args...)) }
-func (a *slogAdapter) Warn(msg string, args ...any)  { a.logger.Warn(fmt.Sprintf(msg, args...)) }
-func (a *slogAdapter) Error(msg string, args ...any) { a.logger.Error(fmt.Sprintf(msg, args...)) }
+func (a *slogAdapter) log(ctx context.Context, level slog.Level, msg string, args ...any) {
+	traceID, _ := ctx.Value(traceKey).(string)
+	a.logger.Log(ctx, level, fmt.Sprintf(msg, args...), "traceID", traceID)
+}
+
+func (a *slogAdapter) Debug(ctx context.Context, msg string, args ...any) {
+	a.log(ctx, slog.LevelDebug, msg, args...)
+}
+func (a *slogAdapter) Info(ctx context.Context, msg string, args ...any) {
+	a.log(ctx, slog.LevelInfo, msg, args...)
+}
+func (a *slogAdapter) Warn(ctx context.Context, msg string, args ...any) {
+	a.log(ctx, slog.LevelWarn, msg, args...)
+}
+func (a *slogAdapter) Error(ctx context.Context, msg string, args ...any) {
+	a.log(ctx, slog.LevelError, msg, args...)
+}
 
 func New(logDir string, debugLevel, accessLevel, panicLevel string) (*Loggers, error) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
@@ -83,13 +103,25 @@ func parseLevel(s string, fallback slog.Level) slog.Level {
 
 type NopLogger struct{}
 
-func (n *NopLogger) Debug(msg string, args ...any) {}
-func (n *NopLogger) Info(msg string, args ...any)  {}
-func (n *NopLogger) Warn(msg string, args ...any)  {}
-func (n *NopLogger) Error(msg string, args ...any) {}
+func (n *NopLogger) Debug(ctx context.Context, msg string, args ...any) {}
+func (n *NopLogger) Info(ctx context.Context, msg string, args ...any)  {}
+func (n *NopLogger) Warn(ctx context.Context, msg string, args ...any)  {}
+func (n *NopLogger) Error(ctx context.Context, msg string, args ...any) {}
 
 var _ Logger = (*NopLogger)(nil)
 var _ Logger = (*slogAdapter)(nil)
+
+func TraceMiddleware(log Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			traceID := uuid.New().String()
+			ctx := context.WithValue(r.Context(), traceKey, traceID)
+			r = r.WithContext(ctx)
+			w.Header().Set("X-Trace-ID", traceID)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
 
 func AccessLog(log Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -97,7 +129,7 @@ func AccessLog(log Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 			sw := &statusWriter{ResponseWriter: w, status: 200}
 			next.ServeHTTP(sw, r)
-			log.Info("%s %s %d %s", r.Method, r.URL.Path, sw.status, time.Since(start))
+			log.Info(r.Context(), "%s %s %d %s", r.Method, r.URL.Path, sw.status, time.Since(start))
 		})
 	}
 }
@@ -107,7 +139,7 @@ func Recovery(log Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					log.Error("panic: %v — %s %s", rec, r.Method, r.URL.Path)
+					log.Error(r.Context(), "panic: %v — %s %s", rec, r.Method, r.URL.Path)
 					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				}
 			}()

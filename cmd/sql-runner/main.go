@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 	"log"
@@ -25,11 +26,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}
-	logs.DebugL.Info("sql-runner starting")
+	logs.DebugL.Info(context.Background(), "sql-runner starting")
 
 	sqlH, err := handler.NewSqlHandler("scripts.db")
 	if err != nil {
-		logs.PanicL.Error("failed to open SQL handler: %v", err)
+		logs.PanicL.Error(context.Background(), "failed to open SQL handler: %v", err)
 		log.Fatalf("failed to open SQL handler: %v", err)
 	}
 
@@ -37,7 +38,7 @@ func main() {
 
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
-		logs.PanicL.Error("failed to setup static files: %v", err)
+		logs.PanicL.Error(context.Background(), "failed to setup static files: %v", err)
 		log.Fatalf("failed to setup static files: %v", err)
 	}
 
@@ -60,8 +61,9 @@ func main() {
 	var srv http.Handler = mux
 	srv = logger.AccessLog(logs.AccessL)(srv)
 	srv = logger.Recovery(logs.PanicL)(srv)
+	srv = logger.TraceMiddleware(logs.DebugL)(srv)
 
 	addr := cfg.Address()
-	logs.DebugL.Info("server starting on http://%s", addr)
+	logs.DebugL.Info(context.Background(), "server starting on http://%s", addr)
 	log.Fatal(http.ListenAndServe(addr, srv))
 }
