@@ -1,20 +1,57 @@
-.PHONY: all build run clean fmt vet lint test
+.PHONY: all build clean fmt vet lint test
+.PHONY: ts sql build-ts build-sql run-ts run-sql clean-ts clean-sql
 
-BINARY_DIR := cmd/ts-quickjs/bin
-BINARY     := $(BINARY_DIR)/ts-quickjs
-CMD_DIR    := ./cmd/ts-quickjs
+SVC ?=
+
+TS_DIR      := cmd/ts-quickjs
+TS_BIN_DIR  := $(TS_DIR)/bin
+TS_BIN      := $(TS_BIN_DIR)/ts-quickjs
+SQL_DIR     := cmd/sql-runner
+SQL_BIN_DIR := $(SQL_DIR)/bin
+SQL_BIN     := $(SQL_BIN_DIR)/sql-runner
 
 all: build
 
+# --- parameterized build: make SVC=ts-quickjs / make SVC=sql-runner ---
 build:
-	@mkdir -p $(BINARY_DIR)
-	go build -o $(BINARY) $(CMD_DIR)
+ifeq ($(SVC),ts-quickjs)
+	@mkdir -p $(TS_BIN_DIR)
+	go build -o $(TS_BIN) ./$(TS_DIR)
+else ifeq ($(SVC),sql-runner)
+	@mkdir -p $(SQL_BIN_DIR)
+	go build -o $(SQL_BIN) ./$(SQL_DIR)
+else
+	@mkdir -p $(TS_BIN_DIR)
+	go build -o $(TS_BIN) ./$(TS_DIR)
+	@mkdir -p $(SQL_BIN_DIR)
+	go build -o $(SQL_BIN) ./$(SQL_DIR)
+endif
 
-run: build
-	./$(BINARY)
+# --- short aliases ---
+ts build-ts:
+	@mkdir -p $(TS_BIN_DIR)
+	go build -o $(TS_BIN) ./$(TS_DIR)
 
+sql build-sql:
+	@mkdir -p $(SQL_BIN_DIR)
+	go build -o $(SQL_BIN) ./$(SQL_DIR)
+
+# --- run ---
+run-ts: ts
+	./$(TS_BIN)
+
+run-sql: sql
+	./$(SQL_BIN)
+
+# --- clean ---
 clean:
-	rm -rf $(BINARY_DIR) build
+	rm -rf $(TS_BIN_DIR) $(SQL_BIN_DIR) build
+
+clean-ts:
+	rm -rf $(TS_BIN_DIR)
+
+clean-sql:
+	rm -rf $(SQL_BIN_DIR)
 
 fmt:
 	go fmt ./...

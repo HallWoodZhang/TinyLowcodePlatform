@@ -6,17 +6,12 @@ import (
 	"os"
 )
 
-const (
-	defaultHost = "127.0.0.1"
-	defaultPort = "9720"
-)
-
 type Config struct {
 	Host string `json:"host"`
 	Port string `json:"port"`
 }
 
-func Load(path string) *Config {
+func Load(path, envHost, envPort, defaultHost, defaultPort string) *Config {
 	cfg := &Config{Host: defaultHost, Port: defaultPort}
 	if data, err := os.ReadFile(path); err == nil {
 		if err := json.Unmarshal(data, cfg); err != nil {
@@ -25,10 +20,10 @@ func Load(path string) *Config {
 	} else {
 		log.Printf("config: %s not found, using defaults", path)
 	}
-	if h := os.Getenv("TOY_HOST"); h != "" {
+	if h := os.Getenv(envHost); h != "" {
 		cfg.Host = h
 	}
-	if p := os.Getenv("TOY_PORT"); p != "" {
+	if p := os.Getenv(envPort); p != "" {
 		cfg.Port = p
 	}
 	return cfg

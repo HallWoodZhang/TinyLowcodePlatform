@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQL Runner</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1e1e2e; color: #cdd6f4; height: 100vh; overflow: hidden; }
+.app { display: flex; height: 100vh; }
+.sidebar { width: 220px; min-width: 220px; background: #181825; border-right: 1px solid #313244; display: flex; flex-direction: column; }
+.sidebar-header { padding: 12px 16px; border-bottom: 1px solid #313244; }
+.sidebar-header h2 { font-size: 14px; font-weight: 600; }
+#table-list { list-style: none; overflow-y: auto; flex: 1; }
+#table-list li { padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #313244; font-size: 13px; font-family: 'JetBrains Mono', 'Fira Code', monospace; transition: background 0.15s; }
+#table-list li:hover { background: #45475a; }
+.main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.editor-area { flex: 0 0 auto; display: flex; flex-direction: column; border-bottom: 1px solid #313244; }
+.editor-header { padding: 8px 16px; background: #181825; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #313244; }
+.editor-header span { font-size: 12px; color: #a6adc8; }
+.actions { display: flex; gap: 8px; align-items: center; }
+.actions button { padding: 6px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px; }
+#run-btn { background: #89b4fa; color: #1e1e2e; }
+#run-btn:hover { background: #74c7ec; }
+#run-sel-btn { background: #45475a; color: #cdd6f4; }
+#run-sel-btn:hover { background: #585b70; }
+#sql-editor { width: 100%; height: 160px; min-height: 120px; background: #1e1e2e; color: #cdd6f4; border: none; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; line-height: 1.6; resize: vertical; outline: none; tab-size: 2; }
+#sql-editor::placeholder { color: #585b70; }
+.result-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.result-header { padding: 8px 16px; background: #181825; border-bottom: 1px solid #313244; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.result-header h3 { font-size: 12px; color: #a6adc8; }
+.format-toggle { display: flex; gap: 0; }
+.format-toggle button { padding: 4px 12px; border: 1px solid #45475a; background: #1e1e2e; color: #a6adc8; cursor: pointer; font-size: 11px; }
+.format-toggle button:first-child { border-radius: 4px 0 0 4px; }
+.format-toggle button:last-child { border-radius: 0 4px 4px 0; }
+.format-toggle button.active { background: #45475a; color: #cdd6f4; }
+#result { flex: 1; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; overflow: auto; margin: 0; }
+.error-text { color: #f38ba8; }
+#json-result { flex: 1; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; overflow: auto; margin: 0; display: none; }
+#table-result { display: block; }
+#json-result { display: none; }
+.result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.result-table th { background: #313244; padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #45475a; position: sticky; top: 0; }
+.result-table td { padding: 6px 12px; border-bottom: 1px solid #313244; }
+.result-table tr:hover td { background: #313244; }
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="sidebar-header"><h2>Tables</h2></div>
+  <ul id="table-list"></ul>
+</aside>
+<main class="main-area">
+  <div class="editor-area">
+    <div class="editor-header">
+      <span>SQL Query — Ctrl+Enter to run · Select text + Ctrl+Shift+Enter to run selection</span>
+      <div class="actions">
+        <button id="run-sel-btn">Run Selected</button>
+        <button id="run-btn">Run</button>
+      </div>
+    </div>
+    <textarea id="sql-editor" placeholder="SELECT * FROM scripts LIMIT 10;
+EXPLAIN QUERY PLAN SELECT * FROM scripts WHERE type = 'typescript';" spellcheck="false"></textarea>
+  </div>
+  <div class="result-area">
+    <div class="result-header">
+      <h3>Result <span id="row-count"></span></h3>
+      <div class="format-toggle">
+        <button id="fmt-table" class="active">Table</button>
+        <button id="fmt-json">JSON</button>
+      </div>
+    </div>
+    <pre id="result"></pre>
+  </div>
+</main>
+</div>
+<script>
+const API_TABLES = '/api/sql/tables';
+const API_RUN = '/api/sql/run';
+let outputMode = 'table';
+let lastResult = null;
+
+const $ = id => document.getElementById(id);
+const tableList = $('table-list');
+const sqlEditor = $('sql-editor');
+const resultEl = $('result');
+const rowCount = $('row-count');
+
+async function loadTables() {
+  const res = await fetch(API_TABLES);
+  const tables = await res.json();
+  tableList.innerHTML = '';
+  for (const name of tables) {
+    const li = document.createElement('li');
+    li.textContent = name;
+    li.title = 'Click to select table';
+    li.onclick = () => { sqlEditor.value = 'SELECT * FROM ' + name + ' LIMIT 100;'; sqlEditor.focus(); };
+    tableList.appendChild(li);
+  }
+}
+
+async function runSQL(sql) {
+  if (!sql.trim()) return;
+  resultEl.textContent = 'Running...';
+  resultEl.className = '';
+  rowCount.textContent = '';
+  const res = await fetch(API_RUN, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sql }),
+  });
+  const data = await res.json();
+  lastResult = data;
+  if (data.error) {
+    resultEl.textContent = data.error;
+    resultEl.className = 'error-text';
+    rowCount.textContent = '';
+  } else {
+    rowCount.textContent = data.rowCount !== undefined ? '(' + data.rowCount + ' rows)' : '';
+    renderResult(data);
+  }
+}
+
+function renderResult(data) {
+  if (outputMode === 'json') {
+    resultEl.textContent = JSON.stringify(data, null, 2);
+    resultEl.classList.remove('error-text');
+    return;
+  }
+  if (!data.columns || data.columns.length === 0) {
+    resultEl.textContent = 'OK';
+    resultEl.classList.remove('error-text');
+    return;
+  }
+  let html = '<table class="result-table"><thead><tr>';
+  data.columns.forEach(c => { html += '<th>' + esc(c) + '</th>'; });
+  html += '</tr></thead><tbody>';
+  data.rows.forEach(row => {
+    html += '<tr>';
+    row.forEach(cell => {
+      html += '<td>' + esc(cell === null ? 'NULL' : String(cell)) + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  resultEl.innerHTML = html;
+  resultEl.classList.remove('error-text');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+$('run-btn').onclick = () => runSQL(sqlEditor.value);
+$('run-sel-btn').onclick = () => {
+  const sel = sqlEditor.value.substring(sqlEditor.selectionStart, sqlEditor.selectionEnd).trim();
+  if (!sel) { runSQL(sqlEditor.value); }
+  else { runSQL(sel); }
+};
+
+$('fmt-table').onclick = () => {
+  outputMode = 'table';
+  $('fmt-table').classList.add('active');
+  $('fmt-json').classList.remove('active');
+  if (lastResult && !lastResult.error) renderResult(lastResult);
+};
+$('fmt-json').onclick = () => {
+  outputMode = 'json';
+  $('fmt-json').classList.add('active');
+  $('fmt-table').classList.remove('active');
+  if (lastResult && !lastResult.error) renderResult(lastResult);
+};
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    if (e.shiftKey) {
+      const sel = sqlEditor.value.substring(sqlEditor.selectionStart, sqlEditor.selectionEnd).trim();
+      if (sel) { runSQL(sel); return; }
+    }
+    runSQL(sqlEditor.value);
+  }
+});
+
+loadTables();
+</script>
+</body>
+</html>

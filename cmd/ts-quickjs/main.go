@@ -15,7 +15,7 @@ import (
 var staticFiles embed.FS
 
 func main() {
-	cfg := config.Load("cmd/ts-quickjs/conf/config.json")
+	cfg := config.Load("cmd/ts-quickjs/conf/config.json", "TS_HOST", "TS_PORT", "127.0.0.1", "9720")
 
 	db, err := db.New("scripts.db")
 	if err != nil {
@@ -31,7 +31,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to setup static files: %v", err)
 	}
-	mux.Handle("GET /", http.FileServer(http.FS(staticFS)))
+
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/ts-quickjs/ui/index.html", http.StatusFound)
+	})
+
+	mux.HandleFunc("GET /ts-quickjs/ui/index.html", func(w http.ResponseWriter, r *http.Request) {
+		data, _ := fs.ReadFile(staticFS, "index.html")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(data)
+	})
+
+	fileServer := http.FileServer(http.FS(staticFS))
+	mux.Handle("GET /ts-quickjs/ui/", http.StripPrefix("/ts-quickjs/ui", fileServer))
 
 	mux.HandleFunc("GET /api/scripts", h.ListScripts)
 	mux.HandleFunc("POST /api/scripts", h.CreateScript)
@@ -41,6 +53,6 @@ func main() {
 	mux.HandleFunc("POST /api/scripts/{id}/run", h.RunScript)
 
 	addr := cfg.Address()
-	log.Printf("Server starting on http://%s", addr)
+	log.Printf("ts-runner starting on http://%s", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))
 }
