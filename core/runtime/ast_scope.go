@@ -144,6 +144,9 @@ func walkExpr(e ast.Expression, offset int, result *[]string) {
 func collectBindings(bindings []*ast.Binding, result *[]string) {
 	for _, b := range bindings {
 		if id, ok := b.Target.(*ast.Identifier); ok {
+			if b.Initializer == nil {
+				continue // skip uninitialized let/const (would cause TDZ error)
+			}
 			addTo(result, id.Name.String())
 		}
 	}
