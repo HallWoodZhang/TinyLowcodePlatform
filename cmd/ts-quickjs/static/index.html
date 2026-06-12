@@ -115,17 +115,17 @@ const KW = /\b(?:const|let|var|function|return|if|else|for|while|do|switch|case|
 const TY = /\b(?:string|number|boolean|void|any|never|unknown|object|bigint|symbol|undefined|null)\b/g;
 
 function highlight(ts) {
-  let html = esc(ts);
-  html = html.replace(/(\/\/[^\n]*)/g, '<span class="hl-comment">$1</span>');
-  html = html.replace(/('(?:[^'\\]|\\.)*')/g, '<span class="hl-string">$1</span>');
-  html = html.replace(/("(?:[^"\\]|\\.)*")/g, '<span class="hl-string">$1</span>');
-  html = html.replace(/(`(?:[^`\\]|\\.)*`)/g, '<span class="hl-string">$1</span>');
-  html = html.replace(/(\b\d+\.?\d*\b)/g, '<span class="hl-number">$1</span>');
-  html = html.replace(KW, '<span class="hl-keyword">$1</span>');
-  html = html.replace(TY, '<span class="hl-type">$1</span>');
-  html = html.replace(/(\w+)(?=\s*\()/g, '<span class="hl-func">$1</span>');
-  html = html.replace(/\/([^*\/][^\n]*?\/)/g, '<span class="hl-regex">$1</span>');
-  return html;
+  return esc(ts)
+    .replace(/(\/\/[^\n]*)/g, '<span class="hl-comment">$1</span>')
+    .replace(/('(?:[^'\\]|\\.)*')/g, '<span class="hl-string">$1</span>')
+    .replace(/("(?:[^"\\]|\\.)*")/g, '<span class="hl-string">$1</span>')
+    .replace(/(`(?:[^`\\]|\\.)*`)/g, '<span class="hl-string">$1</span>')
+    .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="hl-comment">$1</span>')
+    .replace(/(\b\d+\.?\d*\b)/g, '<span class="hl-number">$1</span>')
+    .replace(TY, '<span class="hl-type">$1</span>')
+    .replace(KW, '<span class="hl-keyword">$1</span>')
+    .replace(/(\w+)(?=\s*\()/g, '<span class="hl-func">$1</span>')
+    .replace(/\/([^*\/][^\n]*?\/)/g, '<span class="hl-regex">$1</span>');
 }
 
 function updateHighlight() {
