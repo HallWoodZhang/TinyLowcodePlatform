@@ -72,6 +72,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .stack-line { color: #585b70; font-size: 12px; padding: 2px 0; }
 .error-text { color: #f38ba8; }
 .CodeMirror-gutter-wrapper.bp-line .CodeMirror-linenumber { color: #f38ba8 !important; font-weight: bold; }
+.bp-highlight { background: rgba(249, 226, 175, 0.15); }
 #editor-wrap .CodeMirror-gutters { cursor: pointer; }
 </style>
 </head>
@@ -151,20 +152,6 @@ const editor = CodeMirror($('editor-wrap'), {
 editor.on('gutterClick', (cm, n) => {
   toggleBreakpoint(n + 1);
 });
-
-// Alternative gutter click via DOM event (more reliable cross-browser)
-const gutterEl = document.querySelector('#editor-wrap .CodeMirror-gutters');
-if (gutterEl) {
-  gutterEl.addEventListener('click', function(e) {
-    const rect = this.getBoundingClientRect();
-    const y = e.clientY - rect.top + this.scrollTop;
-    const lineHeight = editor.defaultTextHeight();
-    const line = Math.floor(y / lineHeight);
-    if (line >= 0 && line < editor.lineCount()) {
-      toggleBreakpoint(line + 1);
-    }
-  });
-}
 editor.on('changes', () => {
   const t = activeTab();
   if (t) { t.code = editor.getValue(); t.dirty = true; renderTabs(); }
@@ -377,6 +364,7 @@ async function debugScript(e) {
   if (!t || !t.id) return;
   $('output').textContent = 'Debugging...';
   switchOutputTab('output');
+  clearHighlights();
   const res = await fetch(`${API}/${t.id}/debug`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -390,6 +378,12 @@ function hideStepButtons() {
   $('continue-btn').style.display = 'none';
   $('stepover-btn').style.display = 'none';
   debugState = null;
+}
+
+function clearHighlights() {
+  for (var i = 0; i < editor.lineCount(); i++) {
+    editor.removeLineClass(i, 'background', 'bp-highlight');
+  }
 }
 
 $('continue-btn').onclick = () => {
@@ -459,6 +453,15 @@ function debugResult(result, t) {
     });
     $('debug-panel').innerHTML = html;
     switchOutputTab('debug');
+    // Highlight breakpoint lines in editor
+    clearHighlights();
+    result.breakpoints.forEach(bp => {
+      editor.addLineClass(bp.line - 1, 'background', 'bp-highlight');
+      var cmLine = bp.line - 1;
+      if (cmLine >= 0 && cmLine < editor.lineCount()) {
+        editor.scrollIntoView({line: cmLine, ch: 0}, 100);
+      }
+    });
   } else {
     hideStepButtons();
     $('row-count').textContent = result.output ? 'done' : '';
