@@ -298,18 +298,18 @@ async function toggleBreakpoint(line) {
   const t = activeTab();
   if (!t || !t.id) return;
   const info = editor.lineInfo(line - 1);
-  const hasBp = info.gutterClass && info.gutterClass.includes('bp-line');
+  const gutterClass = info.gutterClass || '';
+  const hasBp = gutterClass.indexOf('bp-line') >= 0;
   if (hasBp) {
-    await fetch(`${API}/${t.id}/breakpoints/${line}`, { method: 'DELETE' });
+    fetch(`${API}/${t.id}/breakpoints/${line}`, { method: 'DELETE' });
     editor.removeLineClass(line - 1, 'gutter', 'bp-line');
   } else {
     fetch(`${API}/${t.id}/breakpoints`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ line, enabled: true }),
-    }).then(() => {
-      editor.addLineClass(line - 1, 'gutter', 'bp-line');
     });
+    editor.addLineClass(line - 1, 'gutter', 'bp-line');
   }
 }
 
