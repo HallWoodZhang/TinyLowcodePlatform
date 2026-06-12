@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -36,7 +37,9 @@ func (e *GojaEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLine,
 	}
 
 	if len(jsLines) > 0 {
-		jsCode = instrumentCode(jsCode, jsLines, lineVars)
+		instrumented := instrumentCode(jsCode, jsLines, lineVars)
+		os.WriteFile("/tmp/instrumented.js", []byte(instrumented), 0644)
+		jsCode = instrumented
 	}
 	result := e.executeDebug(jsCode, skip, timeoutMs)
 	for i := range result.Breakpoints {

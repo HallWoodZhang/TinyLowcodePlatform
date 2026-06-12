@@ -14,10 +14,14 @@ func FindScopeVars(jsCode string, line int) []string {
 		return nil
 	}
 
-	offset := lineToOffset(jsCode, line)
+	lineStart := lineToOffset(jsCode, line)
+	lineEnd := lineToOffset(jsCode, line+1)
+	if lineEnd == 0 {
+		lineEnd = len(jsCode)
+	}
 
 	var result []string
-	walkStmtList(program.Body, program.DeclarationList, offset, &result)
+	walkStmtList(program.Body, program.DeclarationList, lineStart, lineEnd, &result)
 	sort.Strings(result)
 	return result
 }
@@ -31,27 +35,36 @@ func lineToOffset(code string, line int) int {
 	return offset
 }
 
-func walkStmtList(body []ast.Statement, decls []*ast.VariableDeclaration, offset int, result *[]string) {
+func walkStmtList(body []ast.Statement, decls []*ast.VariableDeclaration, lineStart, lineEnd int, result *[]string) {
 	for _, d := range decls {
-		collectBindings(d.List, result)
+		collectBindings(d.List, result, lineStart, lineEnd)
 	}
 	for _, s := range body {
-		walkNode(s, offset, result)
+		walkNode(s, lineStart, lineEnd, result)
 	}
 }
 
-func walkNode(n ast.Node, offset int, result *[]string) {
+func walkNode(n ast.Node, lineStart, lineEnd int, result *[]string) {
 	if n == nil {
 		return
 	}
+	if int(n.Idx0()) >= lineEnd {
+		return
+	}
+
+	isSameLine := int(n.Idx0()) >= lineStart && int(n.Idx0()) < lineEnd
 
 	switch st := n.(type) {
 	case *ast.BlockStatement:
-		walkStmtList(st.List, nil, offset, result)
+		walkStmtList(st.List, nil, lineStart, lineEnd, result)
 	case *ast.VariableStatement:
-		collectBindings(st.List, result)
+		if !isSameLine {
+			collectBindings(st.List, result, lineStart, lineEnd)
+		}
 	case *ast.LexicalDeclaration:
-		collectBindings(st.List, result)
+		if !isSameLine {
+			collectBindings(st.List, result, lineStart, lineEnd)
+		}
 	case *ast.FunctionDeclaration:
 		if st.Function != nil {
 			for _, p := range st.Function.ParameterList.List {
@@ -63,48 +76,48 @@ func walkNode(n ast.Node, offset int, result *[]string) {
 				addTo(result, st.Function.Name.Name.String())
 			}
 			if st.Function.Body != nil {
-				walkNode(st.Function.Body, offset, result)
+				walkNode(st.Function.Body, lineStart, lineEnd, result)
 			}
 		}
 	case *ast.IfStatement:
-		walkNode(st.Consequent, offset, result)
-		walkNode(st.Alternate, offset, result)
+		walkNode(st.Consequent, lineStart, lineEnd, result)
+		walkNode(st.Alternate, lineStart, lineEnd, result)
 	case *ast.WhileStatement, *ast.DoWhileStatement:
 		if s, ok := n.(*ast.WhileStatement); ok {
-			walkNode(s.Body, offset, result)
+			walkNode(s.Body, lineStart, lineEnd, result)
 		} else if s, ok := n.(*ast.DoWhileStatement); ok {
-			walkNode(s.Body, offset, result)
+			walkNode(s.Body, lineStart, lineEnd, result)
 		}
 	case *ast.ForStatement:
 		if st.Body != nil {
 			if vs, ok := st.Initializer.(ast.Node); ok {
 				if vstmt, ok := vs.(*ast.VariableStatement); ok {
-					collectBindings(vstmt.List, result)
+					collectBindings(vstmt.List, result, lineStart, lineEnd)
 				}
 				if ldecl, ok := vs.(*ast.LexicalDeclaration); ok {
-					collectBindings(ldecl.List, result)
+					collectBindings(ldecl.List, result, lineStart, lineEnd)
 				}
 			}
-			walkNode(st.Body, offset, result)
+			walkNode(st.Body, lineStart, lineEnd, result)
 		}
 	case *ast.TryStatement:
-		walkNode(st.Body, offset, result)
+		walkNode(st.Body, lineStart, lineEnd, result)
 		if st.Catch != nil {
-			walkNode(st.Catch.Body, offset, result)
+			walkNode(st.Catch.Body, lineStart, lineEnd, result)
 		}
 		if st.Finally != nil {
-			walkNode(st.Finally, offset, result)
+			walkNode(st.Finally, lineStart, lineEnd, result)
 		}
 	case *ast.SwitchStatement:
 		for _, cs := range st.Body {
-			walkNode(cs, offset, result)
+			walkNode(cs, lineStart, lineEnd, result)
 		}
 	case *ast.ExpressionStatement:
-		walkExpr(st.Expression, offset, result)
+		walkExpr(st.Expression, lineStart, lineEnd, result)
 	}
 }
 
-func walkExpr(e ast.Expression, offset int, result *[]string) {
+func walkExpr(e ast.Expression, lineStart, lineEnd int, result *[]string) {
 	if e == nil {
 		return
 	}
@@ -116,7 +129,7 @@ func walkExpr(e ast.Expression, offset int, result *[]string) {
 			}
 		}
 		if ex.Body != nil {
-			walkNode(ex.Body, offset, result)
+			walkNode(ex.Body, lineStart, lineEnd, result)
 		}
 	case *ast.ArrowFunctionLiteral:
 		for _, p := range ex.ParameterList.List {
@@ -125,27 +138,30 @@ func walkExpr(e ast.Expression, offset int, result *[]string) {
 			}
 		}
 		if ex.Body != nil {
-			walkNode(ex.Body, offset, result)
+			walkNode(ex.Body, lineStart, lineEnd, result)
 		}
 	case *ast.CallExpression:
-		walkExpr(ex.Callee, offset, result)
+		walkExpr(ex.Callee, lineStart, lineEnd, result)
 		for _, a := range ex.ArgumentList {
-			walkExpr(a, offset, result)
+			walkExpr(a, lineStart, lineEnd, result)
 		}
 	case *ast.AssignExpression:
-		walkExpr(ex.Left, offset, result)
-		walkExpr(ex.Right, offset, result)
+		walkExpr(ex.Left, lineStart, lineEnd, result)
+		walkExpr(ex.Right, lineStart, lineEnd, result)
 	case *ast.BinaryExpression:
-		walkExpr(ex.Left, offset, result)
-		walkExpr(ex.Right, offset, result)
+		walkExpr(ex.Left, lineStart, lineEnd, result)
+		walkExpr(ex.Right, lineStart, lineEnd, result)
 	}
 }
 
-func collectBindings(bindings []*ast.Binding, result *[]string) {
+func collectBindings(bindings []*ast.Binding, result *[]string, lineStart, lineEnd int) {
 	for _, b := range bindings {
 		if id, ok := b.Target.(*ast.Identifier); ok {
 			if b.Initializer == nil {
-				continue // skip uninitialized let/const (would cause TDZ error)
+				continue
+			}
+			if int(id.Idx0()) >= lineStart && int(id.Idx0()) < lineEnd {
+				continue
 			}
 			addTo(result, id.Name.String())
 		}
