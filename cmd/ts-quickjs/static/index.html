@@ -341,7 +341,7 @@ function switchOutputTab(name) {
   $('tab-output').classList.toggle('active', name === 'output');
   $('tab-debug').classList.toggle('active', name === 'debug');
   $('output').style.display = name === 'output' ? '' : 'none';
-  $('debug-panel').style.display = name === 'debug' ? '' : 'none';
+  $('debug-panel').style.display = name === 'debug' ? 'block' : 'none';
 }
 
 async function toggleBreakpoint(line) {
