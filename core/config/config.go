@@ -7,9 +7,10 @@ import (
 )
 
 type Config struct {
-	Host string    `json:"host"`
-	Port string    `json:"port"`
-	Log  *LogConfig `json:"log,omitempty"`
+	Host   string     `json:"host"`
+	Port   string     `json:"port"`
+	Engine string     `json:"engine,omitempty"`
+	Log    *LogConfig `json:"log,omitempty"`
 }
 
 type LogConfig struct {

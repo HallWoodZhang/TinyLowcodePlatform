@@ -37,9 +37,16 @@ func main() {
 	}
 	defer database.Close()
 
+	var runner runtime.Runner
+	if cfg.Engine == "quickjs" {
+		runner = &runtime.QuickJSEngine{}
+	} else {
+		runner = &runtime.GojaEngine{}
+	}
+
 	h := &handler.Handler{
 		Store:   database,
-		Runner:  &runtime.GojaEngine{},
+		Runner:  runner,
 		BpStore: database,
 	}
 
