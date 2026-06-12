@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"toy-platform/core/config"
 	"toy-platform/core/db"
@@ -18,19 +20,27 @@ import (
 var staticFiles embed.FS
 
 func main() {
-	cfg := config.Load("cmd/ts-quickjs/conf/config.json", "TS_HOST", "TS_PORT", "127.0.0.1", "9720")
+	home := os.Getenv("LOWCODE_HOME")
+	if home == "" {
+		home = "."
+	}
+	cfgPath := filepath.Join(home, "cmd/ts-quickjs/conf/config.json")
+	logDir := filepath.Join(home, "cmd/ts-quickjs/logs")
+	dbPath := filepath.Join(home, "scripts.db")
+
+	cfg := config.Load(cfgPath, "TS_HOST", "TS_PORT", "127.0.0.1", "9720")
 
 	logLevels := cfg.Log
 	if logLevels == nil {
 		logLevels = &config.LogConfig{}
 	}
-	logs, err := logger.New("cmd/ts-quickjs/logs", logLevels.Debug, logLevels.Access, logLevels.Panic)
+	logs, err := logger.New(logDir, logLevels.Debug, logLevels.Access, logLevels.Panic)
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}
-	logs.DebugL.Info(context.Background(), "ts-runner starting")
+	logs.DebugL.Info(context.Background(), "ts-runner starting, home=%s", home)
 
-	database, err := db.New("scripts.db")
+	database, err := db.New(dbPath)
 	if err != nil {
 		logs.PanicL.Error(context.Background(), "failed to open database: %v", err)
 		log.Fatalf("failed to open database: %v", err)

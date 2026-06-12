@@ -4,6 +4,7 @@ cmd/ts-quickjs/conf/config.json
 cmd/sql-runner/conf/config.json
 cmd/ts-quickjs/logs/
 cmd/sql-runner/logs/
+.vscode/
 scripts.db
 coverage.out
 coverage.html

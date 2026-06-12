@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"toy-platform/core/config"
 	"toy-platform/core/handler"
@@ -16,19 +18,27 @@ import (
 var staticFiles embed.FS
 
 func main() {
-	cfg := config.Load("cmd/sql-runner/conf/config.json", "SQL_HOST", "SQL_PORT", "127.0.0.1", "9721")
+	home := os.Getenv("LOWCODE_HOME")
+	if home == "" {
+		home = "."
+	}
+	cfgPath := filepath.Join(home, "cmd/sql-runner/conf/config.json")
+	logDir := filepath.Join(home, "cmd/sql-runner/logs")
+	dbPath := filepath.Join(home, "scripts.db")
+
+	cfg := config.Load(cfgPath, "SQL_HOST", "SQL_PORT", "127.0.0.1", "9721")
 
 	logLevels := cfg.Log
 	if logLevels == nil {
 		logLevels = &config.LogConfig{}
 	}
-	logs, err := logger.New("cmd/sql-runner/logs", logLevels.Debug, logLevels.Access, logLevels.Panic)
+	logs, err := logger.New(logDir, logLevels.Debug, logLevels.Access, logLevels.Panic)
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}
-	logs.DebugL.Info(context.Background(), "sql-runner starting")
+	logs.DebugL.Info(context.Background(), "sql-runner starting, home=%s", home)
 
-	sqlH, err := handler.NewSqlHandler("scripts.db")
+	sqlH, err := handler.NewSqlHandler(dbPath)
 	if err != nil {
 		logs.PanicL.Error(context.Background(), "failed to open SQL handler: %v", err)
 		log.Fatalf("failed to open SQL handler: %v", err)
