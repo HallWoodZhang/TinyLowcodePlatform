@@ -17,7 +17,11 @@ var staticFiles embed.FS
 func main() {
 	cfg := config.Load("cmd/sql-runner/conf/config.json", "SQL_HOST", "SQL_PORT", "127.0.0.1", "9721")
 
-	logs, err := logger.New("cmd/sql-runner/logs")
+	logLevels := cfg.Log
+	if logLevels == nil {
+		logLevels = &config.LogConfig{}
+	}
+	logs, err := logger.New("cmd/sql-runner/logs", logLevels.Debug, logLevels.Access, logLevels.Panic)
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}

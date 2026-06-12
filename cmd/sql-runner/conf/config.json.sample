@@ -1,4 +1,9 @@
 {
     "host": "127.0.0.1",
-    "port": "9721"
+    "port": "9721",
+    "log": {
+        "debug": "debug",
+        "access": "info",
+        "panic": "error"
+    }
 }

@@ -19,7 +19,11 @@ var staticFiles embed.FS
 func main() {
 	cfg := config.Load("cmd/ts-quickjs/conf/config.json", "TS_HOST", "TS_PORT", "127.0.0.1", "9720")
 
-	logs, err := logger.New("cmd/ts-quickjs/logs")
+	logLevels := cfg.Log
+	if logLevels == nil {
+		logLevels = &config.LogConfig{}
+	}
+	logs, err := logger.New("cmd/ts-quickjs/logs", logLevels.Debug, logLevels.Access, logLevels.Panic)
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}

@@ -31,12 +31,13 @@ func (a *slogAdapter) Info(msg string, args ...any)  { a.logger.Info(fmt.Sprintf
 func (a *slogAdapter) Warn(msg string, args ...any)  { a.logger.Warn(fmt.Sprintf(msg, args...)) }
 func (a *slogAdapter) Error(msg string, args ...any) { a.logger.Error(fmt.Sprintf(msg, args...)) }
 
-func New(logDir string) (*Loggers, error) {
+func New(logDir string, debugLevel, accessLevel, panicLevel string) (*Loggers, error) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return nil, fmt.Errorf("create log dir: %w", err)
 	}
 
-	newLogger := func(name string, level slog.Level) (*slog.Logger, *os.File, error) {
+	newLogger := func(name, rawLevel string, defaultLevel slog.Level) (*slog.Logger, *os.File, error) {
+		level := parseLevel(rawLevel, defaultLevel)
 		f, err := os.OpenFile(filepath.Join(logDir, name+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			return nil, nil, err
@@ -45,15 +46,15 @@ func New(logDir string) (*Loggers, error) {
 		return slog.New(h), f, nil
 	}
 
-	debugL, _, err := newLogger("debug", slog.LevelDebug)
+	debugL, _, err := newLogger("debug", debugLevel, slog.LevelDebug)
 	if err != nil {
 		return nil, err
 	}
-	accessL, _, err := newLogger("access", slog.LevelInfo)
+	accessL, _, err := newLogger("access", accessLevel, slog.LevelInfo)
 	if err != nil {
 		return nil, err
 	}
-	panicL, _, err := newLogger("panic", slog.LevelError)
+	panicL, _, err := newLogger("panic", panicLevel, slog.LevelError)
 	if err != nil {
 		return nil, err
 	}
@@ -63,6 +64,21 @@ func New(logDir string) (*Loggers, error) {
 		AccessL: &slogAdapter{accessL},
 		PanicL:  &slogAdapter{panicL},
 	}, nil
+}
+
+func parseLevel(s string, fallback slog.Level) slog.Level {
+	switch s {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return fallback
+	}
 }
 
 type NopLogger struct{}
