@@ -147,6 +147,17 @@ const editor = CodeMirror($('editor-wrap'), {
 editor.on('gutterClick', (cm, n) => {
   toggleBreakpoint(n + 1);
 });
+
+// fallback: attach click to gutter DOM element
+setTimeout(() => {
+  const gutters = document.querySelector('#editor-wrap .CodeMirror-gutters');
+  if (gutters) {
+    gutters.addEventListener('click', (e) => {
+      const line = editor.lineAtHeight(e.offsetY);
+      if (line >= 0) toggleBreakpoint(line + 1);
+    });
+  }
+}, 200);
 editor.on('changes', () => {
   const t = activeTab();
   if (t) { t.code = editor.getValue(); t.dirty = true; renderTabs(); }
