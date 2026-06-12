@@ -379,30 +379,6 @@ async function debugScript(e) {
   const result = await res.json();
   debugResult(result, t);
 }
-    let html = '';
-    result.breakpoints.forEach(bp => {
-      html += '<div style="margin-bottom:12px">';
-      html += '<div style="color:#f9e2af;font-weight:600">● Line ' + bp.line + '</div>';
-      if (bp.name) {
-        html += '<div style="color:#a6adc8;font-size:11px;margin:4px 0">Stack:</div>';
-        bp.name.replace(/\\n/g, '\n').split('\n').filter(s => s.trim()).forEach(s => {
-          html += '<div class="stack-line">' + esc(s.trim()) + '</div>';
-        });
-      }
-      if (bp.vars && Object.keys(bp.vars).length > 0) {
-        html += '<div style="color:#a6adc8;font-size:11px;margin:4px 0">Vars:</div>';
-        html += '<table class="vars-table">';
-        Object.keys(bp.vars).sort().forEach(k => {
-          html += '<tr><td>' + esc(k) + '</td><td>' + esc(String(bp.vars[k])) + '</td></tr>';
-        });
-        html += '</table>';
-      }
-      html += '</div>';
-    });
-    $('debug-panel').innerHTML = html;
-    switchOutputTab('debug');
-  }
-}
 
 function hideStepButtons() {
   $('continue-btn').style.display = 'none';
