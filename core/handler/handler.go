@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"toy-platform/core/db"
 	"toy-platform/core/runtime"
@@ -115,7 +116,20 @@ func (h *Handler) RunScript(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "script not found"})
 		return
 	}
-	result := h.Runner.Run(script.TSCode, 10000)
+
+	var resolver runtime.ScriptResolver
+	if store, ok := h.Store.(interface{ GetByName(string) (*db.Script, error) }); ok {
+		resolver = func(name string) (string, error) {
+			name = strings.TrimPrefix(name, "./")
+			s, err := store.GetByName(name)
+			if err != nil {
+				return "", err
+			}
+			return s.TSCode, nil
+		}
+	}
+
+	result := h.Runner.Run(script.TSCode, resolver, 10000)
 	writeJSON(w, http.StatusOK, result)
 }
 

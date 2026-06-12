@@ -15,6 +15,7 @@ import (
 type mockStore struct {
 	listFn   func() ([]db.ScriptSummary, error)
 	getFn    func(id int64) (*db.Script, error)
+	getByNameFn func(name string) (*db.Script, error)
 	createFn func(name, label, scriptType, tsCode string) (*db.Script, error)
 	updateFn func(id int64, name, label, scriptType, tsCode *string) (*db.Script, error)
 	deleteFn func(id int64) error
@@ -22,6 +23,7 @@ type mockStore struct {
 
 func (m *mockStore) List() ([]db.ScriptSummary, error)  { return m.listFn() }
 func (m *mockStore) Get(id int64) (*db.Script, error)    { return m.getFn(id) }
+func (m *mockStore) GetByName(name string) (*db.Script, error) { return m.getByNameFn(name) }
 func (m *mockStore) Create(name, label, scriptType, tsCode string) (*db.Script, error) {
 	return m.createFn(name, label, scriptType, tsCode)
 }
@@ -31,11 +33,11 @@ func (m *mockStore) Update(id int64, name, label, scriptType, tsCode *string) (*
 func (m *mockStore) Delete(id int64) error { return m.deleteFn(id) }
 
 type mockRunner struct {
-	runFn func(tsCode string, timeoutMs int64) runtime.RunResult
+	runFn func(tsCode string, resolver runtime.ScriptResolver, timeoutMs int64) runtime.RunResult
 }
 
-func (m *mockRunner) Run(tsCode string, timeoutMs int64) runtime.RunResult {
-	return m.runFn(tsCode, timeoutMs)
+func (m *mockRunner) Run(tsCode string, resolver runtime.ScriptResolver, timeoutMs int64) runtime.RunResult {
+	return m.runFn(tsCode, resolver, timeoutMs)
 }
 
 func TestListScripts(t *testing.T) {
@@ -284,10 +286,10 @@ func TestRunScript(t *testing.T) {
 	errStore := &mockStore{getFn: func(id int64) (*db.Script, error) {
 		return nil, fmt.Errorf("not found")
 	}}
-	okRunner := &mockRunner{runFn: func(tsCode string, timeoutMs int64) runtime.RunResult {
+	okRunner := &mockRunner{runFn: func(tsCode string, resolver runtime.ScriptResolver, timeoutMs int64) runtime.RunResult {
 		return runtime.RunResult{Output: "1\n"}
 	}}
-	errRunner := &mockRunner{runFn: func(tsCode string, timeoutMs int64) runtime.RunResult {
+	errRunner := &mockRunner{runFn: func(tsCode string, resolver runtime.ScriptResolver, timeoutMs int64) runtime.RunResult {
 		return runtime.RunResult{Error: "compile error"}
 	}}
 

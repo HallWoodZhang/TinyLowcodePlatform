@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -18,28 +19,87 @@ type RunResult struct {
 	Error  string `json:"error,omitempty"`
 }
 
+type ScriptResolver func(name string) (source string, err error)
+
 type Runner interface {
-	Run(tsCode string, timeoutMs int64) RunResult
+	Run(tsCode string, resolver ScriptResolver, timeoutMs int64) RunResult
 }
 
 type Engine struct{}
 
-func (e *Engine) Run(tsCode string, timeoutMs int64) RunResult {
-	transformResult := api.Transform(tsCode, api.TransformOptions{
-		Loader:    api.LoaderTS,
+var stackLineRE = regexp.MustCompile(`script\.ts:(\d+)`)
+var inlineSourcemapRE = regexp.MustCompile(`//# sourceMappingURL=data:application/json;base64,([^\s]+)`)
+
+func (e *Engine) Run(tsCode string, resolver ScriptResolver, timeoutMs int64) RunResult {
+	var sourcemapBytes []byte
+
+	result := api.Build(api.BuildOptions{
+		Stdin: &api.StdinOptions{
+			Contents:   tsCode,
+			ResolveDir: "/",
+			Loader:     api.LoaderTS,
+		},
 		Format:    api.FormatIIFE,
-		Sourcemap: api.SourceMapExternal,
+		Bundle:    true,
+		Write:     false,
+		Sourcemap: api.SourceMapInline,
+		Plugins: []api.Plugin{{
+			Name: "script-resolver",
+			Setup: func(build api.PluginBuild) {
+				build.OnResolve(api.OnResolveOptions{Filter: `.*`}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
+					if args.Kind != api.ResolveJSImportStatement {
+						return api.OnResolveResult{}, nil
+					}
+					if resolver == nil {
+						return api.OnResolveResult{}, nil
+					}
+					_, err := resolver(args.Path)
+					if err != nil {
+						return api.OnResolveResult{}, nil
+					}
+					return api.OnResolveResult{
+						Path:      args.Path,
+						Namespace: "script",
+					}, nil
+				})
+
+				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "script"}, func(args api.OnLoadArgs) (api.OnLoadResult, error) {
+					source, err := resolver(args.Path)
+					if err != nil {
+						return api.OnLoadResult{}, nil
+					}
+					return api.OnLoadResult{
+						Contents: &source,
+						Loader:   api.LoaderTS,
+					}, nil
+				})
+			},
+		}},
 	})
-	if len(transformResult.Errors) > 0 {
+
+	if len(result.Errors) > 0 {
 		var errs []string
-		for _, msg := range transformResult.Errors {
+		for _, msg := range result.Errors {
 			errs = append(errs, msg.Text)
 		}
-		return RunResult{Error: "TypeScript compilation error:\n" + strings.Join(errs, "\n")}
+		return RunResult{Error: "Build error:\n" + strings.Join(errs, "\n")}
 	}
 
-	jsCode := string(transformResult.Code)
-	mapper := loadSourceMap(transformResult.Map)
+	if len(result.OutputFiles) == 0 {
+		return RunResult{Error: "Build produced no output"}
+	}
+
+	jsCode := string(result.OutputFiles[0].Contents)
+
+	// Extract inline source map
+	match := inlineSourcemapRE.FindStringSubmatch(jsCode)
+	if match != nil {
+		decoded, err := base64.StdEncoding.DecodeString(match[1])
+		if err == nil {
+			sourcemapBytes = decoded
+		}
+	}
+	mapper := loadSourceMap(sourcemapBytes)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
@@ -69,8 +129,6 @@ func loadSourceMap(data []byte) *sm.Consumer {
 	}
 	return consumer
 }
-
-var stackLineRE = regexp.MustCompile(`script\.ts:(\d+)`)
 
 func mapJSError(err error, mapper *sm.Consumer) string {
 	msg := err.Error()

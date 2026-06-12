@@ -41,6 +41,7 @@ type ScriptSummary struct {
 type ScriptStore interface {
 	List() ([]ScriptSummary, error)
 	Get(id int64) (*Script, error)
+	GetByName(name string) (*Script, error)
 	Create(name, label, scriptType, tsCode string) (*Script, error)
 	Update(id int64, name, label, scriptType, tsCode *string) (*Script, error)
 	Delete(id int64) error
@@ -138,6 +139,16 @@ func migrate(db *sql.DB) error {
 
 	log.Println("migration complete")
 	return nil
+}
+
+func (d *DB) GetByName(name string) (*Script, error) {
+	var s Script
+	err := d.QueryRow(`SELECT id, name, label, type, ts_code, created_at, updated_at FROM scripts WHERE name = ?`, name).
+		Scan(&s.ID, &s.Name, &s.Label, &s.Type, &s.TSCode, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
 }
 
 func (d *DB) List() ([]ScriptSummary, error) {
