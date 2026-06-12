@@ -38,10 +38,10 @@ func main() {
 	defer database.Close()
 
 	var runner runtime.Runner
-	if cfg.Engine == "quickjs" {
-		runner = &runtime.QuickJSEngine{}
-	} else {
+	if cfg.Engine == "goja" {
 		runner = &runtime.GojaEngine{}
+	} else {
+		runner = &runtime.QuickJSEngine{}
 	}
 
 	h := &handler.Handler{

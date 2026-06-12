@@ -1,7 +1,7 @@
 {
     "host": "127.0.0.1",
     "port": "9720",
-    "engine": "goja",
+    "engine": "quickjs",
     "log": {
         "debug": "debug",
         "access": "info",
