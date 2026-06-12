@@ -58,8 +58,18 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 #editor-wrap .CodeMirror-gutters { background: #181825; border-right: 1px solid #313244; }
 #editor-wrap .CodeMirror-linenumber { color: #585b70; }
 .output-area { height: 200px; min-height: 200px; border-top: 1px solid #313244; background: #11111b; display: flex; flex-direction: column; }
-.output-area h3 { padding: 8px 16px; font-size: 12px; color: #a6adc8; border-bottom: 1px solid #313244; flex-shrink: 0; }
-#output { flex: 1; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; overflow-y: auto; margin: 0; }
+.output-header { padding: 6px 16px; border-bottom: 1px solid #313244; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.output-tabs { display: flex; gap: 4px; }
+.output-tab { padding: 3px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; color: #a6adc8; background: transparent; border: none; }
+.output-tab:hover { background: #313244; }
+.output-tab.active { background: #45475a; color: #cdd6f4; }
+#output, #debug-panel { flex: 1; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; overflow-y: auto; margin: 0; }
+#debug-panel { display: none; }
+.error-text { color: #f38ba8; }
+.vars-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 4px 0; }
+.vars-table td { padding: 2px 8px; border-bottom: 1px solid #313244; }
+.vars-table td:first-child { color: #89b4fa; width: 120px; }
+.stack-line { color: #585b70; font-size: 12px; padding: 2px 0; }
 .error-text { color: #f38ba8; }
 .CodeMirror-gutter-wrapper.bp-line .CodeMirror-linenumber { color: #f38ba8 !important; font-weight: bold; }
 #editor-wrap .CodeMirror-gutters { cursor: pointer; }
@@ -88,8 +98,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   </div>
   <div id="editor-wrap"></div>
   <div class="output-area">
-    <h3>Output</h3>
+    <div class="output-header">
+      <div class="output-tabs">
+        <button class="output-tab active" id="tab-output">Output</button>
+        <button class="output-tab" id="tab-debug">Debug</button>
+      </div>
+      <span id="row-count" style="font-size:11px;color:#585b70"></span>
+    </div>
     <pre id="output"></pre>
+    <div id="debug-panel"></div>
   </div>
 </main>
 </div>
@@ -293,6 +310,15 @@ $('new-btn').onclick = async () => {
 $('save-btn').onclick = saveScript;
 $('run-btn').onclick = runScript;
 $('debug-btn').onclick = debugScript;
+$('tab-output').onclick = () => { switchOutputTab('output'); };
+$('tab-debug').onclick = () => { switchOutputTab('debug'); };
+
+function switchOutputTab(name) {
+  $('tab-output').classList.toggle('active', name === 'output');
+  $('tab-debug').classList.toggle('active', name === 'debug');
+  $('output').style.display = name === 'output' ? '' : 'none';
+  $('debug-panel').style.display = name === 'debug' ? '' : 'none';
+}
 
 async function toggleBreakpoint(line) {
   const t = activeTab();
@@ -325,26 +351,44 @@ async function debugScript(e) {
   await saveScript();
   const t = activeTab();
   if (!t || !t.id) return;
-  outputEl.textContent = 'Debugging...';
-  outputEl.className = '';
+  $('output').textContent = 'Debugging...';
+  switchOutputTab('output');
   const res = await fetch(`${API}/${t.id}/debug`, { method: 'POST' });
   const result = await res.json();
-  let text = '';
-  if (result.output) text += result.output;
-  if (result.breakpoints && result.breakpoints.length > 0) {
-    text += '\n=== Breakpoints ===';
-    result.breakpoints.forEach(bp => {
-      text += `\n  ● Line ${bp.line}`;
-      if (bp.vars && Object.keys(bp.vars).length > 0) {
-        text += '\n    Globals: ' + JSON.stringify(bp.vars);
-      }
-      if (bp.name) {
-        text += '\n    Stack:\n      ' + bp.name.replace(/\\n/g, '\n      ');
-      }
-    });
+  
+  if (result.error) {
+    $('output').textContent = result.error;
+    $('output').className = 'error-text';
+    return;
   }
-  if (result.error) outputEl.className = 'error-text';
-  outputEl.textContent = text;
+  $('output').textContent = result.output || '(no output)';
+  $('output').className = '';
+  
+  if (result.breakpoints && result.breakpoints.length > 0) {
+    $('row-count').textContent = result.breakpoints.length + ' breakpoint(s)';
+    let html = '';
+    result.breakpoints.forEach(bp => {
+      html += '<div style="margin-bottom:12px">';
+      html += '<div style="color:#f9e2af;font-weight:600">● Line ' + bp.line + '</div>';
+      if (bp.name) {
+        html += '<div style="color:#a6adc8;font-size:11px;margin:4px 0">Stack:</div>';
+        bp.name.replace(/\\n/g, '\n').split('\n').filter(s => s.trim()).forEach(s => {
+          html += '<div class="stack-line">' + esc(s.trim()) + '</div>';
+        });
+      }
+      if (bp.vars && Object.keys(bp.vars).length > 0) {
+        html += '<div style="color:#a6adc8;font-size:11px;margin:4px 0">Globals:</div>';
+        html += '<table class="vars-table">';
+        Object.keys(bp.vars).sort().forEach(k => {
+          html += '<tr><td>' + esc(k) + '</td><td>' + esc(String(bp.vars[k])) + '</td></tr>';
+        });
+        html += '</table>';
+      }
+      html += '</div>';
+    });
+    $('debug-panel').innerHTML = html;
+    switchOutputTab('debug');
+  }
 }
 
 async function loadBreakpoints() {
