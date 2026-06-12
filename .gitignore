@@ -2,6 +2,9 @@ cmd/ts-quickjs/bin/
 cmd/sql-runner/bin/
 cmd/ts-quickjs/conf/config.json
 cmd/sql-runner/conf/config.json
+cmd/ts-quickjs/logs/
+cmd/sql-runner/logs/
 scripts.db
 coverage.out
 coverage.html
+STANDARDS.md

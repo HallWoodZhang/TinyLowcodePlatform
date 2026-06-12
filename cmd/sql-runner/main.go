@@ -8,6 +8,7 @@ import (
 
 	"toy-platform/core/config"
 	"toy-platform/core/handler"
+	"toy-platform/core/logger"
 )
 
 //go:embed static/*
@@ -16,8 +17,15 @@ var staticFiles embed.FS
 func main() {
 	cfg := config.Load("cmd/sql-runner/conf/config.json", "SQL_HOST", "SQL_PORT", "127.0.0.1", "9721")
 
+	appLog, err := logger.New("cmd/sql-runner/logs")
+	if err != nil {
+		log.Fatalf("failed to init logger: %v", err)
+	}
+	appLog.Debug("sql-runner starting")
+
 	sqlH, err := handler.NewSqlHandler("scripts.db")
 	if err != nil {
+		appLog.Panic("failed to open SQL handler: %v", err)
 		log.Fatalf("failed to open SQL handler: %v", err)
 	}
 
@@ -25,6 +33,7 @@ func main() {
 
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
+		appLog.Panic("failed to setup static files: %v", err)
 		log.Fatalf("failed to setup static files: %v", err)
 	}
 
@@ -44,7 +53,11 @@ func main() {
 	mux.HandleFunc("GET /api/sql/tables", sqlH.ListTables)
 	mux.HandleFunc("POST /api/sql/run", sqlH.RunSQL)
 
+	var srv http.Handler = mux
+	srv = logger.AccessLog(appLog)(srv)
+	srv = logger.Recovery(appLog)(srv)
+
 	addr := cfg.Address()
-	log.Printf("sql-runner starting on http://%s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	appLog.Debug("server starting on http://%s", addr)
+	log.Fatal(http.ListenAndServe(addr, srv))
 }

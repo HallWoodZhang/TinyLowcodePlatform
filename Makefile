@@ -77,6 +77,33 @@ cover:
 	go tool cover -html=$(COVER_OUT) -o $(COVER_HTML)
 
 cover-summary:
+
+# --- docker ---
+docker-build:
+	docker build -t ts-quickjs -f cmd/ts-quickjs/Dockerfile .
+	docker build -t sql-runner -f cmd/sql-runner/Dockerfile .
+
+docker-up:
+	docker compose up -d --build
+
+docker-down:
+	docker compose down
+
+docker-test:
+	@echo "Waiting for services..."
+	@sleep 2
+	@echo "=== TS Runner ==="
+	@curl -s http://localhost:9720/api/scripts && echo
+	@echo "=== SQL Runner ==="
+	@curl -s http://localhost:9721/api/sql/tables && echo
+	@echo "=== Creating script ==="
+	@curl -s -X POST http://localhost:9720/api/scripts \
+		-H 'Content-Type: application/json' \
+		-d '{"name":"docker-test","label":"Docker Test","type":"ts","tsCode":"console.log(42);"}' && echo
+	@echo "=== Query via SQL ==="
+	@curl -s -X POST http://localhost:9721/api/sql/run \
+		-H 'Content-Type: application/json' \
+		-d '{"sql":"SELECT id, name, type FROM scripts"}' && echo
 	go test -coverprofile=$(COVER_OUT) $(COVER_PKGS)
 	@echo ""
 	@echo "==================== Coverage Summary ===================="

@@ -1,0 +1,27 @@
+services:
+  ts-quickjs:
+    build:
+      context: .
+      dockerfile: cmd/ts-quickjs/Dockerfile
+    ports:
+      - "9720:9720"
+    volumes:
+      - scripts_data:/app
+    environment:
+      - TS_HOST=0.0.0.0
+    restart: unless-stopped
+
+  sql-runner:
+    build:
+      context: .
+      dockerfile: cmd/sql-runner/Dockerfile
+    ports:
+      - "9721:9721"
+    volumes:
+      - scripts_data:/app
+    environment:
+      - SQL_HOST=0.0.0.0
+    restart: unless-stopped
+
+volumes:
+  scripts_data:

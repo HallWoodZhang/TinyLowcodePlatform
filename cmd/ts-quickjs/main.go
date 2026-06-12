@@ -9,6 +9,7 @@ import (
 	"toy-platform/core/config"
 	"toy-platform/core/db"
 	"toy-platform/core/handler"
+	"toy-platform/core/logger"
 	"toy-platform/core/runtime"
 )
 
@@ -18,8 +19,15 @@ var staticFiles embed.FS
 func main() {
 	cfg := config.Load("cmd/ts-quickjs/conf/config.json", "TS_HOST", "TS_PORT", "127.0.0.1", "9720")
 
+	appLog, err := logger.New("cmd/ts-quickjs/logs")
+	if err != nil {
+		log.Fatalf("failed to init logger: %v", err)
+	}
+	appLog.Debug("ts-runner starting")
+
 	database, err := db.New("scripts.db")
 	if err != nil {
+		appLog.Panic("failed to open database: %v", err)
 		log.Fatalf("failed to open database: %v", err)
 	}
 	defer database.Close()
@@ -33,6 +41,7 @@ func main() {
 
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
+		appLog.Panic("failed to setup static files: %v", err)
 		log.Fatalf("failed to setup static files: %v", err)
 	}
 
@@ -56,7 +65,11 @@ func main() {
 	mux.HandleFunc("DELETE /api/scripts/{id}", h.DeleteScript)
 	mux.HandleFunc("POST /api/scripts/{id}/run", h.RunScript)
 
+	var srv http.Handler = mux
+	srv = logger.AccessLog(appLog)(srv)
+	srv = logger.Recovery(appLog)(srv)
+
 	addr := cfg.Address()
-	log.Printf("ts-runner starting on http://%s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	appLog.Debug("server starting on http://%s", addr)
+	log.Fatal(http.ListenAndServe(addr, srv))
 }
