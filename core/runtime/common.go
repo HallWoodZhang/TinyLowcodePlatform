@@ -101,13 +101,25 @@ func mapTSBreakpointsToJS(mapper *sm.Consumer, bps []BpLine) []int {
 }
 
 func findJSLineForTS(mapper *sm.Consumer, tsLine int) int {
+	var candidates []int
 	for js := 1; js < 5000; js++ {
 		_, _, sl, _, ok := mapper.Source(js, 0)
 		if ok && (sl == tsLine || (tsLine > 1 && sl >= tsLine-1 && sl <= tsLine+1)) {
-			return js
+			candidates = append(candidates, js)
 		}
 	}
-	return 0
+	return pickBestLine(candidates)
+}
+
+func pickBestLine(jsLines []int) int {
+	if len(jsLines) == 0 {
+		return 0
+	}
+	if len(jsLines) == 1 {
+		return jsLines[0]
+	}
+	// Return the line closest to the median — avoids edge cases (comments/wrapper lines)
+	return jsLines[len(jsLines)/2]
 }
 
 func instrumentCode(jsCode string, jsLines []int, lineVars map[int][]string) string {
