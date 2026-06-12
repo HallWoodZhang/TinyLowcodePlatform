@@ -93,21 +93,22 @@ func (e *GojaEngine) executeDebug(jsCode string, skip int, timeoutMs int64) RunR
 		var localVars []string
 		if len(call.Arguments) > 1 {
 			varsObj := call.Arguments[1].ToObject(vm)
-			for _, key := range varsObj.Keys() {
+			keys := varsObj.Keys()
+			for _, key := range keys {
 				v := varsObj.Get(key)
 				if v != nil {
 					s := v.String()
 					if len(s) > 200 {
 						s = s[:200] + "..."
 					}
-					localVars = append(localVars, fmt.Sprintf("%s: %s", key, s))
+					localVars = append(localVars, fmt.Sprintf("%s: %s", escapeValue(key), escapeValue(s)))
 				}
 			}
 		}
-
 		bpOutput.WriteString(fmt.Sprintf("__DBG_LINE__:%d\n", line))
 		bpOutput.WriteString(fmt.Sprintf("__DBG_STACK__:%s\n", strings.Join(stackLines, "\\n")))
-		bpOutput.WriteString(fmt.Sprintf("__DBG_GLOBALS__:%s\n", strings.Join(localVars, "|")))
+		bpOutput.WriteString(fmt.Sprintf("__DBG_VARS__:%s\n", strings.Join(localVars, "\x00")))
+		bpOutput.WriteString(fmt.Sprintf("__DBG_VARCOUNT__:%d\n", len(localVars)))
 		if skip < 0 || hitCount > skip {
 			vm.Interrupt("__BP_STOP__")
 		}
@@ -168,11 +169,11 @@ func parseGojaBpHits(raw string) []BreakpointHit {
 			current = &BreakpointHit{Line: line}
 		} else if current != nil && strings.HasPrefix(l, "__DBG_STACK__:") {
 			current.Name = strings.TrimPrefix(l, "__DBG_STACK__:")
-		} else if current != nil && strings.HasPrefix(l, "__DBG_GLOBALS__:") {
+		} else if current != nil && strings.HasPrefix(l, "__DBG_VARS__:") {
 			current.Vars = make(map[string]any)
-			rawVars := strings.TrimPrefix(l, "__DBG_GLOBALS__:")
+			rawVars := strings.TrimPrefix(l, "__DBG_VARS__:")
 			if rawVars != "" {
-				for _, pair := range strings.Split(rawVars, "|") {
+				for _, pair := range strings.Split(rawVars, "\x00") {
 					parts := strings.SplitN(pair, ":", 2)
 					if len(parts) == 2 {
 						current.Vars[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
@@ -195,4 +196,14 @@ func urlDecode(s string) string {
 		return s
 	}
 	return decoded
+}
+
+func escapeValue(s string) string {
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\x00", "")
+	return s
+}
+
+func unescapeValue(s string) string {
+	return s
 }
