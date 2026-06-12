@@ -61,8 +61,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .output-area h3 { padding: 8px 16px; font-size: 12px; color: #a6adc8; border-bottom: 1px solid #313244; flex-shrink: 0; }
 #output { flex: 1; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; overflow-y: auto; margin: 0; }
 .error-text { color: #f38ba8; }
-.CodeMirror-gutter-breakpoints { width: 12px; }
-.bp-marker { color: #f38ba8; font-size: 11px; width: 12px; text-align: center; cursor: pointer; }
+.CodeMirror-gutter-wrapper.bp-line .CodeMirror-linenumber { color: #f38ba8 !important; font-weight: bold; }
+#editor-wrap .CodeMirror-gutters { cursor: pointer; }
 </style>
 </head>
 <body>
@@ -117,7 +117,7 @@ const editor = CodeMirror($('editor-wrap'), {
   theme: 'material-darker',
   lineNumbers: true,
   autoCloseBrackets: true,
-  gutters: ['CodeMirror-linenumbers', 'breakpoints'],
+  gutters: ['CodeMirror-linenumbers'],
   tabSize: 2,
   indentUnit: 2,
   extraKeys: {
@@ -127,10 +127,8 @@ const editor = CodeMirror($('editor-wrap'), {
     'Cmd-Enter': runScript,
   }
 });
-editor.on('gutterClick', (cm, n, gutter) => {
-  if (gutter !== 'breakpoints') return;
-  const line = n + 1;
-  toggleBreakpoint(line);
+editor.on('gutterClick', (cm, n) => {
+  toggleBreakpoint(n + 1);
 });
 editor.on('changes', () => {
   const t = activeTab();
@@ -299,17 +297,18 @@ $('debug-btn').onclick = debugScript;
 async function toggleBreakpoint(line) {
   const t = activeTab();
   if (!t || !t.id) return;
-  const marker = editor.getGutterMarker(line - 1, 'breakpoints');
-  if (marker) {
+  const info = editor.lineInfo(line - 1);
+  const hasBp = info.gutterClass && info.gutterClass.includes('bp-line');
+  if (hasBp) {
     await fetch(`${API}/${t.id}/breakpoints/${line}`, { method: 'DELETE' });
-    editor.setGutterMarker(line - 1, 'breakpoints', null);
+    editor.removeLineClass(line - 1, 'gutter', 'bp-line');
   } else {
     fetch(`${API}/${t.id}/breakpoints`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ line, enabled: true }),
     }).then(() => {
-      editor.setGutterMarker(line - 1, 'breakpoints', makeBpMarker());
+      editor.addLineClass(line - 1, 'gutter', 'bp-line');
     });
   }
 }
@@ -351,13 +350,13 @@ async function debugScript(e) {
 async function loadBreakpoints() {
   const t = activeTab();
   for (let i = 0; i < editor.lineCount(); i++) {
-    editor.setGutterMarker(i, 'breakpoints', null);
+    editor.removeLineClass(i, 'gutter', 'bp-line');
   }
   if (!t || !t.id) return;
   const res = await fetch(`${API}/${t.id}/breakpoints`);
   const bps = await res.json();
   bps.forEach(bp => {
-    editor.setGutterMarker(bp.line - 1, 'breakpoints', makeBpMarker());
+    editor.addLineClass(bp.line - 1, 'gutter', 'bp-line');
   });
 }
 
