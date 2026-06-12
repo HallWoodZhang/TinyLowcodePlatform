@@ -39,7 +39,7 @@ func main() {
 
 	h := &handler.Handler{
 		Store:   database,
-		Runner:  &runtime.Engine{},
+		Runner:  &runtime.GojaEngine{},
 		BpStore: database,
 	}
 
