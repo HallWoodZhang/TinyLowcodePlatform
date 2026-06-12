@@ -19,14 +19,13 @@ func (e *GojaEngine) Run(tsCode string, resolver ScriptResolver, timeoutMs int64
 	return e.execute(jsCode, timeoutMs)
 }
 
-func (e *GojaEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLine, timeoutMs int64) RunResult {
+func (e *GojaEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLine, skip int, timeoutMs int64) RunResult {
 	jsCode, mapper, err := buildJS(tsCode, resolver)
 	if err != nil {
 		return RunResult{Error: err.Error()}
 	}
 	jsLines := mapTSBreakpointsToJS(mapper, bps)
 
-	// Build variable name map for each breakpoint line
 	lineVars := make(map[int][]string)
 	for _, jsLine := range jsLines {
 		vars := FindScopeVars(jsCode, jsLine)
@@ -38,7 +37,7 @@ func (e *GojaEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLine,
 	if len(jsLines) > 0 {
 		jsCode = instrumentCode(jsCode, jsLines, lineVars)
 	}
-	result := e.execute(jsCode, timeoutMs)
+	result := e.executeDebug(jsCode, skip, timeoutMs)
 	for i := range result.Breakpoints {
 		if mapper != nil {
 			if _, _, sl, _, ok := mapper.Source(result.Breakpoints[i].Line, 0); ok {
@@ -50,10 +49,15 @@ func (e *GojaEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLine,
 }
 
 func (e *GojaEngine) execute(jsCode string, timeoutMs int64) RunResult {
+	return e.executeDebug(jsCode, -1, timeoutMs)
+}
+
+func (e *GojaEngine) executeDebug(jsCode string, skip int, timeoutMs int64) RunResult {
 	vm := goja.New()
 
 	var output strings.Builder
 	var bpOutput strings.Builder
+	var hitCount int
 
 	vm.Set("console", map[string]interface{}{
 		"log": func(args ...interface{}) {
@@ -73,6 +77,7 @@ func (e *GojaEngine) execute(jsCode string, timeoutMs int64) RunResult {
 	})
 
 	vm.Set("__dbg", func(call goja.FunctionCall) goja.Value {
+		hitCount++
 		line := 0
 		if len(call.Arguments) > 0 {
 			line = int(call.Arguments[0].ToInteger())
@@ -101,7 +106,9 @@ func (e *GojaEngine) execute(jsCode string, timeoutMs int64) RunResult {
 		bpOutput.WriteString(fmt.Sprintf("__DBG_LINE__:%d\n", line))
 		bpOutput.WriteString(fmt.Sprintf("__DBG_STACK__:%s\n", strings.Join(stackLines, "\\n")))
 		bpOutput.WriteString(fmt.Sprintf("__DBG_GLOBALS__:%s\n", strings.Join(localVars, "|")))
-		vm.Interrupt("__BP_STOP__")
+		if skip < 0 || hitCount > skip {
+			vm.Interrupt("__BP_STOP__")
+		}
 		return goja.Undefined()
 	})
 

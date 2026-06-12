@@ -34,14 +34,14 @@ func (m *mockStore) Delete(id int64) error { return m.deleteFn(id) }
 
 type mockRunner struct {
 	runFn   func(tsCode string, resolver runtime.ScriptResolver, timeoutMs int64) runtime.RunResult
-	debugFn func(tsCode string, resolver runtime.ScriptResolver, bps []runtime.BpLine, timeoutMs int64) runtime.RunResult
+	debugFn func(tsCode string, resolver runtime.ScriptResolver, bps []runtime.BpLine, skip int, timeoutMs int64) runtime.RunResult
 }
 
 func (m *mockRunner) Run(tsCode string, resolver runtime.ScriptResolver, timeoutMs int64) runtime.RunResult {
 	return m.runFn(tsCode, resolver, timeoutMs)
 }
-func (m *mockRunner) Debug(tsCode string, resolver runtime.ScriptResolver, bps []runtime.BpLine, timeoutMs int64) runtime.RunResult {
-	return m.debugFn(tsCode, resolver, bps, timeoutMs)
+func (m *mockRunner) Debug(tsCode string, resolver runtime.ScriptResolver, bps []runtime.BpLine, skip int, timeoutMs int64) runtime.RunResult {
+	return m.debugFn(tsCode, resolver, bps, skip, timeoutMs)
 }
 
 func TestListScripts(t *testing.T) {

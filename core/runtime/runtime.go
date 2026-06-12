@@ -19,7 +19,7 @@ func (e *QuickJSEngine) Run(tsCode string, resolver ScriptResolver, timeoutMs in
 	return e.execute(jsCode)
 }
 
-func (e *QuickJSEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLine, timeoutMs int64) RunResult {
+func (e *QuickJSEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLine, skip int, timeoutMs int64) RunResult {
 	jsCode, mapper, err := buildJS(tsCode, resolver)
 	if err != nil {
 		return RunResult{Error: err.Error()}

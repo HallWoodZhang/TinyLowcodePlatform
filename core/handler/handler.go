@@ -208,6 +208,11 @@ func (h *Handler) DebugScript(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
+	var req struct {
+		Skip int `json:"skip"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
 	script, err := h.Store.Get(id)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "script not found"})
@@ -236,6 +241,6 @@ func (h *Handler) DebugScript(w http.ResponseWriter, r *http.Request) {
 		bpLines[i] = runtime.BpLine{Line: bp.Line, Enabled: bp.Enabled}
 	}
 
-	result := h.Runner.Debug(script.TSCode, resolver, bpLines, 30000)
+	result := h.Runner.Debug(script.TSCode, resolver, bpLines, req.Skip, 30000)
 	writeJSON(w, http.StatusOK, result)
 }

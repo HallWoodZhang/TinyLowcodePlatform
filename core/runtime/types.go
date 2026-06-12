@@ -25,7 +25,7 @@ type ScriptResolver func(name string) (source string, err error)
 
 type Runner interface {
 	Run(tsCode string, resolver ScriptResolver, timeoutMs int64) RunResult
-	Debug(tsCode string, resolver ScriptResolver, bps []BpLine, timeoutMs int64) RunResult
+	Debug(tsCode string, resolver ScriptResolver, bps []BpLine, skip int, timeoutMs int64) RunResult
 }
 
 var _ = (*sm.Consumer)(nil)
