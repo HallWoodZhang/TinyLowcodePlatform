@@ -24,7 +24,7 @@ type Engine struct{}
 func (e *Engine) Run(tsCode string, timeoutMs int64) RunResult {
 	transformResult := api.Transform(tsCode, api.TransformOptions{
 		Loader: api.LoaderTS,
-		Format: api.FormatCommonJS,
+		Format: api.FormatIIFE,
 	})
 	if len(transformResult.Errors) > 0 {
 		var errs []string
