@@ -5,3 +5,4 @@ cmd/sql-runner/conf/config.json
 scripts.db
 coverage.out
 coverage.html
+STANDARDS.md
