@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -22,8 +23,9 @@ type RunResult struct {
 }
 
 type BreakpointHit struct {
-	Line int    `json:"line"`
-	Name string `json:"name,omitempty"`
+	Line int            `json:"line"`
+	Name string         `json:"name,omitempty"`
+	Vars map[string]any `json:"vars,omitempty"`
 }
 
 type BpLine struct {
@@ -206,11 +208,32 @@ func (e *Engine) executeWithTimeout(jsCode string, mapper *sm.Consumer, timeoutM
 
 func parseBpHits(raw string) []BreakpointHit {
 	var hits []BreakpointHit
-	m := regexp.MustCompile(`__DBG__:(\d+);`)
-	matches := m.FindAllStringSubmatch(raw, -1)
-	for _, match := range matches {
-		line, _ := strconv.Atoi(match[1])
-		hits = append(hits, BreakpointHit{Line: line})
+	var current *BreakpointHit
+
+	lines := strings.Split(raw, "\n")
+	for _, l := range lines {
+		if strings.HasPrefix(l, "__DBG_LINE__:") {
+			if current != nil {
+				hits = append(hits, *current)
+			}
+			lineStr := strings.TrimPrefix(l, "__DBG_LINE__:")
+			line, _ := strconv.Atoi(lineStr)
+			current = &BreakpointHit{Line: line}
+		} else if current != nil && strings.HasPrefix(l, "__DBG_STACK__:") {
+			current.Name = strings.TrimPrefix(l, "__DBG_STACK__:")
+		} else if current != nil && strings.HasPrefix(l, "__DBG_GLOBALS__:") {
+			current.Vars = make(map[string]any)
+			gs := strings.TrimPrefix(l, "__DBG_GLOBALS__:")
+			var rawVars map[string]string
+			if err := json.Unmarshal([]byte(gs), &rawVars); err == nil {
+				for k, v := range rawVars {
+					current.Vars[k] = v
+				}
+			}
+		}
+	}
+	if current != nil {
+		hits = append(hits, *current)
 	}
 	return hits
 }
@@ -288,9 +311,26 @@ func executeJS(jsCode string, mapper *sm.Consumer) RunResult {
 	jsCtx.Globals().Set("console", console)
 
 	jsCtx.Globals().Set("__dbg", jsCtx.Function(func(ctx *qjs.Context, this qjs.Value, args []qjs.Value) qjs.Value {
-		for _, arg := range args {
-			bpOutput.WriteString(fmt.Sprintf("__DBG__:%s;", arg.String()))
+		line := "0"
+		if len(args) > 0 {
+			line = args[0].String()
 		}
+		// Capture stack trace
+		stack := ""
+		errObj, _ := ctx.Eval("new Error().stack", qjs.EVAL_GLOBAL)
+		if !errObj.IsUndefined() && !errObj.IsException() {
+			stack = errObj.String()
+		}
+		// Capture global variables
+		globals, _ := ctx.Eval("(function(){var g=globalThis;var r={};try{Object.keys(g).slice(0,50).forEach(function(k){try{var v=g[k];if(typeof v!=='function')r[k]=String(v);}catch(e){}});}catch(e){}return JSON.stringify(r);})()", qjs.EVAL_GLOBAL)
+		gStr := ""
+		if !globals.IsUndefined() && !globals.IsException() {
+			gStr = globals.String()
+		}
+
+		bpOutput.WriteString(fmt.Sprintf("__DBG_LINE__:%s\n", line))
+		bpOutput.WriteString(fmt.Sprintf("__DBG_STACK__:%s\n", strings.ReplaceAll(stack, "\n", "\\n")))
+		bpOutput.WriteString(fmt.Sprintf("__DBG_GLOBALS__:%s\n", gStr))
 		return ctx.Null()
 	}))
 
