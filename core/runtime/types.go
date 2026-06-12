@@ -8,6 +8,7 @@ type RunResult struct {
 	Output      string          `json:"output,omitempty"`
 	Error       string          `json:"error,omitempty"`
 	Breakpoints []BreakpointHit `json:"breakpoints,omitempty"`
+	HitCount    int             `json:"hitCount,omitempty"`
 }
 
 type BreakpointHit struct {

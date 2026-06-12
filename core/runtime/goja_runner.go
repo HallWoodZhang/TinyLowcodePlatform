@@ -124,6 +124,7 @@ func (e *GojaEngine) executeDebug(jsCode string, skip int, timeoutMs int64) RunR
 			if output.Len() > 0 {
 				runResult.Output = output.String()
 			}
+			runResult.HitCount = hitCount
 			runResult.Breakpoints = parseGojaBpHits(bpOutput.String())
 			return runResult
 		}
@@ -141,6 +142,7 @@ func (e *GojaEngine) executeDebug(jsCode string, skip int, timeoutMs int64) RunR
 	} else {
 		runResult.Output = "undefined"
 	}
+	runResult.HitCount = hitCount
 
 	if bpOutput.Len() > 0 {
 		runResult.Breakpoints = parseGojaBpHits(bpOutput.String())
