@@ -3,9 +3,12 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
+	sm "github.com/go-sourcemap/sourcemap"
 	"github.com/evanw/esbuild/pkg/api"
 	qjs "github.com/quickjs-go/quickjs-go"
 )
@@ -23,17 +26,20 @@ type Engine struct{}
 
 func (e *Engine) Run(tsCode string, timeoutMs int64) RunResult {
 	transformResult := api.Transform(tsCode, api.TransformOptions{
-		Loader: api.LoaderTS,
-		Format: api.FormatIIFE,
+		Loader:    api.LoaderTS,
+		Format:    api.FormatIIFE,
+		Sourcemap: api.SourceMapExternal,
 	})
 	if len(transformResult.Errors) > 0 {
 		var errs []string
-		for _, e := range transformResult.Errors {
-			errs = append(errs, e.Text)
+		for _, msg := range transformResult.Errors {
+			errs = append(errs, msg.Text)
 		}
 		return RunResult{Error: "TypeScript compilation error:\n" + strings.Join(errs, "\n")}
 	}
+
 	jsCode := string(transformResult.Code)
+	mapper := loadSourceMap(transformResult.Map)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
@@ -45,7 +51,7 @@ func (e *Engine) Run(tsCode string, timeoutMs int64) RunResult {
 				ch <- RunResult{Error: fmt.Sprintf("runtime panic: %v", r)}
 			}
 		}()
-		ch <- executeJS(jsCode)
+		ch <- executeJS(jsCode, mapper)
 	}()
 
 	select {
@@ -56,7 +62,41 @@ func (e *Engine) Run(tsCode string, timeoutMs int64) RunResult {
 	}
 }
 
-func executeJS(jsCode string) RunResult {
+func loadSourceMap(data []byte) *sm.Consumer {
+	consumer, err := sm.Parse("", data)
+	if err != nil || consumer == nil {
+		return nil
+	}
+	return consumer
+}
+
+var stackLineRE = regexp.MustCompile(`script\.ts:(\d+)`)
+
+func mapJSError(err error, mapper *sm.Consumer) string {
+	msg := err.Error()
+	if mapper == nil {
+		return msg
+	}
+	qjsErr, ok := err.(*qjs.Error)
+	if !ok {
+		return msg
+	}
+	match := stackLineRE.FindStringSubmatch(qjsErr.Stack)
+	if match == nil {
+		return msg
+	}
+	jsLine, err := strconv.Atoi(match[1])
+	if err != nil || jsLine < 1 {
+		return msg
+	}
+	_, _, srcLine, _, ok := mapper.Source(jsLine, 0)
+	if !ok {
+		return msg
+	}
+	return fmt.Sprintf("%s\n    at TypeScript line %d", msg, srcLine)
+}
+
+func executeJS(jsCode string, mapper *sm.Consumer) RunResult {
 	runtime := qjs.NewRuntime()
 	defer runtime.Free()
 
@@ -95,11 +135,11 @@ func executeJS(jsCode string) RunResult {
 	}))
 	jsCtx.Globals().Set("console", console)
 
-	result, err := jsCtx.Eval(jsCode, qjs.EVAL_GLOBAL)
+	result, err := jsCtx.EvalFile(jsCode, qjs.EVAL_GLOBAL, "script.ts")
 	if err != nil {
 		return RunResult{
 			Output: output.String(),
-			Error:  "JavaScript runtime error: " + err.Error(),
+			Error:  "JavaScript runtime error: " + mapJSError(err, mapper),
 		}
 	}
 	defer result.Free()
