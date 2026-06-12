@@ -16,28 +16,30 @@ type Handler struct {
 type createReq struct {
 	Name   string `json:"name"`
 	Label  string `json:"label"`
+	Type   string `json:"type"`
 	TSCode string `json:"tsCode"`
 }
 
 type updateReq struct {
 	Name   *string `json:"name"`
 	Label  *string `json:"label"`
+	Type   *string `json:"type"`
 	TSCode *string `json:"tsCode"`
 }
 
-func (h *Handler) ListSnippets(w http.ResponseWriter, r *http.Request) {
-	snippets, err := h.DB.ListSnippets()
+func (h *Handler) ListScripts(w http.ResponseWriter, r *http.Request) {
+	scripts, err := h.DB.ListScripts()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	if snippets == nil {
-		snippets = []db.SnippetSummary{}
+	if scripts == nil {
+		scripts = []db.ScriptSummary{}
 	}
-	writeJSON(w, http.StatusOK, snippets)
+	writeJSON(w, http.StatusOK, scripts)
 }
 
-func (h *Handler) CreateSnippet(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateScript(w http.ResponseWriter, r *http.Request) {
 	var req createReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
@@ -47,29 +49,29 @@ func (h *Handler) CreateSnippet(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and label are required"})
 		return
 	}
-	snippet, err := h.DB.CreateSnippet(req.Name, req.Label, req.TSCode)
+	script, err := h.DB.CreateScript(req.Name, req.Label, req.Type, req.TSCode)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusCreated, snippet)
+	writeJSON(w, http.StatusCreated, script)
 }
 
-func (h *Handler) GetSnippet(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetScript(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	snippet, err := h.DB.GetSnippet(id)
+	script, err := h.DB.GetScript(id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "snippet not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "script not found"})
 		return
 	}
-	writeJSON(w, http.StatusOK, snippet)
+	writeJSON(w, http.StatusOK, script)
 }
 
-func (h *Handler) UpdateSnippet(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateScript(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -80,39 +82,39 @@ func (h *Handler) UpdateSnippet(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
-	snippet, err := h.DB.UpdateSnippet(id, req.Name, req.Label, req.TSCode)
+	script, err := h.DB.UpdateScript(id, req.Name, req.Label, req.Type, req.TSCode)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, snippet)
+	writeJSON(w, http.StatusOK, script)
 }
 
-func (h *Handler) DeleteSnippet(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DeleteScript(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	if err := h.DB.DeleteSnippet(id); err != nil {
+	if err := h.DB.DeleteScript(id); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) RunSnippet(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) RunScript(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	snippet, err := h.DB.GetSnippet(id)
+	script, err := h.DB.GetScript(id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "snippet not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "script not found"})
 		return
 	}
-	result := runtime.RunTSCode(snippet.TSCode, 10000)
+	result := runtime.RunTSCode(script.TSCode, 10000)
 	writeJSON(w, http.StatusOK, result)
 }
 

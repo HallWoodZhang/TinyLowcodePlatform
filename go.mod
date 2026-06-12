@@ -3,6 +3,7 @@ module toy-platform
 go 1.25.0
 
 require (
+	github.com/bwmarrin/snowflake v0.3.0
 	github.com/evanw/esbuild v0.28.1
 	github.com/quickjs-go/quickjs-go v0.0.0-20230414054158-b72900cb68c1
 	modernc.org/sqlite v1.52.0

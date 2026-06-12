@@ -27,7 +27,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .editor-header input { background: #313244; border: 1px solid #45475a; color: #cdd6f4; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
 .editor-header input:focus { outline: none; border-color: #cba6f7; }
 #name-input { width: 170px; }
-#label-input { flex: 1; max-width: 280px; }
+#label-input { flex: 1; max-width: 240px; }
+#type-input { width: 120px; }
 .actions { margin-left: auto; display: flex; gap: 8px; }
 .actions button { padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; }
 #save-btn { background: #a6e3a1; color: #1e1e2e; }
@@ -46,15 +47,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <div class="app">
 <aside class="sidebar">
   <div class="sidebar-header">
-    <h2>Snippets</h2>
+    <h2>Scripts</h2>
     <button id="new-btn">+ New</button>
   </div>
-  <ul id="snippet-list"></ul>
+   <ul id="script-list"></ul>
 </aside>
 <main class="editor-area">
   <div class="editor-header">
     <input id="name-input" placeholder="name (unique id)" spellcheck="false" />
     <input id="label-input" placeholder="display name" spellcheck="false" />
+    <input id="type-input" placeholder="type" spellcheck="false" />
     <div class="actions">
       <button id="save-btn">Save</button>
       <button id="run-btn">Run ▸</button>
@@ -70,52 +72,55 @@ console.log(msg);" spellcheck="false"></textarea>
 </main>
 </div>
 <script>
-const API = '/api/snippets';
+const API = '/api/scripts';
 let currentId = null;
 
 const $ = id => document.getElementById(id);
-const listEl = $('snippet-list');
+const listEl = $('script-list');
 const nameEl = $('name-input');
 const labelEl = $('label-input');
+const typeEl = $('type-input');
 const codeEl = $('code-editor');
 const outputEl = $('output');
 
 async function loadList() {
   const res = await fetch(API);
-  const snippets = await res.json();
+  const scripts = await res.json();
   listEl.innerHTML = '';
-  snippets.forEach(s => {
+  scripts.forEach(s => {
     const li = document.createElement('li');
-    li.innerHTML = `<div class="snippet-info"><div class="snippet-label-display">${esc(s.label)}</div><div class="snippet-name-display">${esc(s.name)}</div></div>`;
+    li.innerHTML = `<div class="snippet-info"><div class="snippet-label-display">${esc(s.label)}</div><div class="snippet-name-display">${esc(s.name)}${s.type ? ' · ' + esc(s.type) : ''}</div></div>`;
     const delBtn = document.createElement('button');
     delBtn.className = 'delete-btn';
     delBtn.textContent = '\u00D7';
     delBtn.title = 'Delete';
-    delBtn.onclick = (e) => { e.stopPropagation(); deleteSnippet(s.id); };
+    delBtn.onclick = (e) => { e.stopPropagation(); deleteScript(s.id); };
     li.appendChild(delBtn);
-    li.onclick = () => selectSnippet(s.id);
+    li.onclick = () => selectScript(s.id);
     if (s.id === currentId) li.classList.add('active');
     listEl.appendChild(li);
   });
 }
 
-async function selectSnippet(id) {
+async function selectScript(id) {
   currentId = id;
   const res = await fetch(`${API}/${id}`);
   if (!res.ok) return;
   const s = await res.json();
   nameEl.value = s.name;
   labelEl.value = s.label;
+  typeEl.value = s.type || '';
   codeEl.value = s.tsCode;
   outputEl.textContent = '';
   outputEl.className = '';
   loadList();
 }
 
-async function saveSnippet() {
+async function saveScript() {
   const payload = {
     name: nameEl.value.trim(),
     label: labelEl.value.trim(),
+    type: typeEl.value.trim(),
     tsCode: codeEl.value,
   };
   if (!payload.name) { alert('Name is required'); return; }
@@ -137,14 +142,14 @@ async function saveSnippet() {
     alert('Save failed: ' + (data.error || res.statusText));
     return;
   }
-  const snippet = await res.json();
-  currentId = snippet.id;
+  const script = await res.json();
+  currentId = script.id;
   await loadList();
 }
 
-async function runSnippet() {
+async function runScript() {
   if (!currentId) {
-    await saveSnippet();
+    await saveScript();
     if (!currentId) return;
   }
   outputEl.textContent = 'Running...';
@@ -155,17 +160,18 @@ async function runSnippet() {
   if (result.error) outputEl.className = 'error-text';
 }
 
-async function deleteSnippet(id) {
-  if (!confirm('Delete this snippet?')) return;
+async function deleteScript(id) {
+  if (!confirm('Delete this script?')) return;
   await fetch(`${API}/${id}`, { method: 'DELETE' });
-  if (currentId === id) newSnippet();
+  if (currentId === id) newScript();
   await loadList();
 }
 
-function newSnippet() {
+function newScript() {
   currentId = null;
   nameEl.value = '';
   labelEl.value = '';
+  typeEl.value = '';
   codeEl.value = '';
   outputEl.textContent = '';
   outputEl.className = '';
@@ -175,13 +181,13 @@ function esc(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-$('new-btn').onclick = () => { newSnippet(); loadList(); };
-$('save-btn').onclick = saveSnippet;
-$('run-btn').onclick = runSnippet;
+$('new-btn').onclick = () => { newScript(); loadList(); };
+$('save-btn').onclick = saveScript;
+$('run-btn').onclick = runScript;
 
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveSnippet(); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runSnippet(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveScript(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runScript(); }
 });
 
 loadList();
