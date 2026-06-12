@@ -449,7 +449,9 @@ function debugResult(result, t) {
         html += '<div style="color:#a6adc8;font-size:11px;margin:4px 0">Vars:</div>';
         html += '<table class="vars-table">';
         Object.keys(bp.vars).sort().forEach(k => {
-          html += '<tr><td>' + esc(k) + '</td><td>' + esc(String(bp.vars[k])) + '</td></tr>';
+          var val = String(bp.vars[k]);
+          if (val.length > 100) val = val.substring(0, 100) + '...';
+          html += '<tr><td>' + esc(k) + '</td><td title="' + esc(String(bp.vars[k])) + '">' + esc(val) + '</td></tr>';
         });
         html += '</table>';
       }
