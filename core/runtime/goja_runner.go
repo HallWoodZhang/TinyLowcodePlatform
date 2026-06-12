@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -85,7 +86,8 @@ func (e *GojaEngine) executeDebug(jsCode string, skip int, timeoutMs int64) RunR
 		stack := vm.CaptureCallStack(50, nil)
 		var stackLines []string
 		for _, frame := range stack {
-			stackLines = append(stackLines, fmt.Sprintf("    at %s (%s:%d)", frame.FuncName(), frame.Position().Filename, frame.Position().Line))
+			stackLines = append(stackLines, fmt.Sprintf("    at %s (%s:%d)",
+				frame.FuncName(), urlDecode(frame.Position().Filename), frame.Position().Line))
 		}
 
 		var localVars []string
@@ -186,3 +188,11 @@ func parseGojaBpHits(raw string) []BreakpointHit {
 }
 
 var _ = sort.IntSlice(nil)
+
+func urlDecode(s string) string {
+	decoded, err := url.QueryUnescape(s)
+	if err != nil {
+		return s
+	}
+	return decoded
+}

@@ -49,7 +49,7 @@ func main() {
 	defer database.Close()
 
 	var runner runtime.Runner
-	fmt.Printf("engine: " + cfg.Engine)
+	fmt.Printf("engine: %s\n", cfg.Engine)
 	if cfg.Engine == "goja" {
 		runner = &runtime.GojaEngine{}
 	} else {

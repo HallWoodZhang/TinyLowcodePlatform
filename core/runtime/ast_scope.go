@@ -44,9 +44,6 @@ func walkNode(n ast.Node, offset int, result *[]string) {
 	if n == nil {
 		return
 	}
-	if int(n.Idx0())-1 > offset {
-		return
-	}
 
 	switch st := n.(type) {
 	case *ast.BlockStatement:
