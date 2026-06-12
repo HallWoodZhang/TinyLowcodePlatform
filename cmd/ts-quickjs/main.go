@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -48,6 +49,7 @@ func main() {
 	defer database.Close()
 
 	var runner runtime.Runner
+	fmt.Printf("engine: " + cfg.Engine)
 	if cfg.Engine == "goja" {
 		runner = &runtime.GojaEngine{}
 	} else {

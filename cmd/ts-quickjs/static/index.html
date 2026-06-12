@@ -196,15 +196,21 @@ function switchTab(idx) {
   renderSidebar();
 }
 
-function openTab(script) {
+async function openTab(script) {
   const existing = tabs.findIndex(t => t.id === script.id);
   if (existing >= 0) {
     switchTab(existing);
-  } else {
-    commitActiveTab();
-    tabs.push({ id: script.id, name: script.name, label: script.label, type: script.type, code: script.tsCode, dirty: false });
-    switchTab(tabs.length - 1);
+    return;
   }
+  commitActiveTab();
+  if (!script.tsCode) {
+    const res = await fetch(`${API}/${script.id}`);
+    if (!res.ok) return;
+    const full = await res.json();
+    script = full;
+  }
+  tabs.push({ id: script.id, name: script.name, label: script.label, type: script.type, code: script.tsCode, dirty: false });
+  switchTab(tabs.length - 1);
 }
 
 function closeTab(idx) {
