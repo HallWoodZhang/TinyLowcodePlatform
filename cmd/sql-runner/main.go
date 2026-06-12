@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 	"log"
@@ -17,15 +18,19 @@ var staticFiles embed.FS
 func main() {
 	cfg := config.Load("cmd/sql-runner/conf/config.json", "SQL_HOST", "SQL_PORT", "127.0.0.1", "9721")
 
-	appLog, err := logger.New("cmd/sql-runner/logs")
+	logLevels := cfg.Log
+	if logLevels == nil {
+		logLevels = &config.LogConfig{}
+	}
+	logs, err := logger.New("cmd/sql-runner/logs", logLevels.Debug, logLevels.Access, logLevels.Panic)
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}
-	appLog.Debug("sql-runner starting")
+	logs.DebugL.Info(context.Background(), "sql-runner starting")
 
 	sqlH, err := handler.NewSqlHandler("scripts.db")
 	if err != nil {
-		appLog.Panic("failed to open SQL handler: %v", err)
+		logs.PanicL.Error(context.Background(), "failed to open SQL handler: %v", err)
 		log.Fatalf("failed to open SQL handler: %v", err)
 	}
 
@@ -33,7 +38,7 @@ func main() {
 
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
-		appLog.Panic("failed to setup static files: %v", err)
+		logs.PanicL.Error(context.Background(), "failed to setup static files: %v", err)
 		log.Fatalf("failed to setup static files: %v", err)
 	}
 
@@ -54,10 +59,11 @@ func main() {
 	mux.HandleFunc("POST /api/sql/run", sqlH.RunSQL)
 
 	var srv http.Handler = mux
-	srv = logger.AccessLog(appLog)(srv)
-	srv = logger.Recovery(appLog)(srv)
+	srv = logger.AccessLog(logs.AccessL)(srv)
+	srv = logger.Recovery(logs.PanicL)(srv)
+	srv = logger.TraceMiddleware(logs.DebugL)(srv)
 
 	addr := cfg.Address()
-	appLog.Debug("server starting on http://%s", addr)
+	logs.DebugL.Info(context.Background(), "server starting on http://%s", addr)
 	log.Fatal(http.ListenAndServe(addr, srv))
 }

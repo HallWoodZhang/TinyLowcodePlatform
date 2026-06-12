@@ -66,7 +66,7 @@ make run-sql     # SQL Runner → http://127.0.0.1:9721
 
 TypeScript 脚本在线编辑与执行环境：
 
-- **前端**：侧边栏脚本列表 + 代码编辑器 + 运行输出区
+- **前端**：侧边栏脚本列表 + CodeMirror 代码编辑器（JS 语法高亮 + 行号） + 运行输出区
 - **后端**：RESTful API，esbuild 编译 TypeScript → QuickJS 执行
 - **特性**：雪花 ID、脚本 CRUD、10 秒超时保护、`Ctrl+S` 保存 / `Ctrl+Enter` 运行
 

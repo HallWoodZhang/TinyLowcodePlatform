@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 	"log"
@@ -19,15 +20,19 @@ var staticFiles embed.FS
 func main() {
 	cfg := config.Load("cmd/ts-quickjs/conf/config.json", "TS_HOST", "TS_PORT", "127.0.0.1", "9720")
 
-	appLog, err := logger.New("cmd/ts-quickjs/logs")
+	logLevels := cfg.Log
+	if logLevels == nil {
+		logLevels = &config.LogConfig{}
+	}
+	logs, err := logger.New("cmd/ts-quickjs/logs", logLevels.Debug, logLevels.Access, logLevels.Panic)
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}
-	appLog.Debug("ts-runner starting")
+	logs.DebugL.Info(context.Background(), "ts-runner starting")
 
 	database, err := db.New("scripts.db")
 	if err != nil {
-		appLog.Panic("failed to open database: %v", err)
+		logs.PanicL.Error(context.Background(), "failed to open database: %v", err)
 		log.Fatalf("failed to open database: %v", err)
 	}
 	defer database.Close()
@@ -41,7 +46,7 @@ func main() {
 
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
-		appLog.Panic("failed to setup static files: %v", err)
+		logs.PanicL.Error(context.Background(), "failed to setup static files: %v", err)
 		log.Fatalf("failed to setup static files: %v", err)
 	}
 
@@ -66,10 +71,11 @@ func main() {
 	mux.HandleFunc("POST /api/scripts/{id}/run", h.RunScript)
 
 	var srv http.Handler = mux
-	srv = logger.AccessLog(appLog)(srv)
-	srv = logger.Recovery(appLog)(srv)
+	srv = logger.AccessLog(logs.AccessL)(srv)
+	srv = logger.Recovery(logs.PanicL)(srv)
+	srv = logger.TraceMiddleware(logs.DebugL)(srv)
 
 	addr := cfg.Address()
-	appLog.Debug("server starting on http://%s", addr)
+	logs.DebugL.Info(context.Background(), "server starting on http://%s", addr)
 	log.Fatal(http.ListenAndServe(addr, srv))
 }

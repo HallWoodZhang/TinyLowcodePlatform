@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SQL Runner</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/material-darker.min.css">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1e1e2e; color: #cdd6f4; height: 100vh; overflow: hidden; }
@@ -24,8 +26,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 #run-btn:hover { background: #74c7ec; }
 #run-sel-btn { background: #45475a; color: #cdd6f4; }
 #run-sel-btn:hover { background: #585b70; }
-#sql-editor { width: 100%; height: 160px; min-height: 120px; background: #1e1e2e; color: #cdd6f4; border: none; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; line-height: 1.6; resize: vertical; outline: none; tab-size: 2; }
-#sql-editor::placeholder { color: #585b70; }
+
+#editor-wrap { height: 160px; overflow: hidden; }
+#editor-wrap .CodeMirror { height: 160px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; line-height: 1.6; }
+#editor-wrap .CodeMirror-gutters { background: #181825; border-right: 1px solid #313244; }
+#editor-wrap .CodeMirror-linenumber { color: #585b70; }
 .result-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .result-header { padding: 8px 16px; background: #181825; border-bottom: 1px solid #313244; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .result-header h3 { font-size: 12px; color: #a6adc8; }
@@ -36,9 +41,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .format-toggle button.active { background: #45475a; color: #cdd6f4; }
 #result { flex: 1; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; overflow: auto; margin: 0; }
 .error-text { color: #f38ba8; }
-#json-result { flex: 1; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; overflow: auto; margin: 0; display: none; }
-#table-result { display: block; }
-#json-result { display: none; }
 .result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .result-table th { background: #313244; padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #45475a; position: sticky; top: 0; }
 .result-table td { padding: 6px 12px; border-bottom: 1px solid #313244; }
@@ -60,8 +62,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
         <button id="run-btn">Run</button>
       </div>
     </div>
-    <textarea id="sql-editor" placeholder="SELECT * FROM scripts LIMIT 10;
-EXPLAIN QUERY PLAN SELECT * FROM scripts WHERE type = 'typescript';" spellcheck="false"></textarea>
+    <div id="editor-wrap"></div>
   </div>
   <div class="result-area">
     <div class="result-header">
@@ -75,6 +76,8 @@ EXPLAIN QUERY PLAN SELECT * FROM scripts WHERE type = 'typescript';" spellcheck=
   </div>
 </main>
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/sql/sql.min.js"></script>
 <script>
 const API_TABLES = '/api/sql/tables';
 const API_RUN = '/api/sql/run';
@@ -83,9 +86,27 @@ let lastResult = null;
 
 const $ = id => document.getElementById(id);
 const tableList = $('table-list');
-const sqlEditor = $('sql-editor');
 const resultEl = $('result');
 const rowCount = $('row-count');
+
+const editor = CodeMirror($('editor-wrap'), {
+  mode: 'text/x-sql',
+  theme: 'material-darker',
+  lineNumbers: true,
+  tabSize: 2,
+  extraKeys: {
+    'Ctrl-Enter': runAll,
+    'Cmd-Enter': runAll,
+    'Shift-Ctrl-Enter': runSelected,
+    'Shift-Cmd-Enter': runSelected,
+  }
+});
+
+function runAll() { runSQL(editor.getValue()); }
+function runSelected() {
+  const sel = editor.getSelection().trim();
+  runSQL(sel || editor.getValue());
+}
 
 async function loadTables() {
   const res = await fetch(API_TABLES);
@@ -95,7 +116,7 @@ async function loadTables() {
     const li = document.createElement('li');
     li.textContent = name;
     li.title = 'Click to select table';
-    li.onclick = () => { sqlEditor.value = 'SELECT * FROM ' + name + ' LIMIT 100;'; sqlEditor.focus(); };
+    li.onclick = () => { editor.setValue('SELECT * FROM ' + name + ' LIMIT 100;'); editor.focus(); };
     tableList.appendChild(li);
   }
 }
@@ -152,12 +173,8 @@ function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-$('run-btn').onclick = () => runSQL(sqlEditor.value);
-$('run-sel-btn').onclick = () => {
-  const sel = sqlEditor.value.substring(sqlEditor.selectionStart, sqlEditor.selectionEnd).trim();
-  if (!sel) { runSQL(sqlEditor.value); }
-  else { runSQL(sel); }
-};
+$('run-btn').onclick = runAll;
+$('run-sel-btn').onclick = runSelected;
 
 $('fmt-table').onclick = () => {
   outputMode = 'table';
@@ -171,17 +188,6 @@ $('fmt-json').onclick = () => {
   $('fmt-table').classList.remove('active');
   if (lastResult && !lastResult.error) renderResult(lastResult);
 };
-
-document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-    e.preventDefault();
-    if (e.shiftKey) {
-      const sel = sqlEditor.value.substring(sqlEditor.selectionStart, sqlEditor.selectionEnd).trim();
-      if (sel) { runSQL(sel); return; }
-    }
-    runSQL(sqlEditor.value);
-  }
-});
 
 loadTables();
 </script>

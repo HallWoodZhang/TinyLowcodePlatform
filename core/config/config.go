@@ -7,8 +7,15 @@ import (
 )
 
 type Config struct {
-	Host string `json:"host"`
-	Port string `json:"port"`
+	Host string    `json:"host"`
+	Port string    `json:"port"`
+	Log  *LogConfig `json:"log,omitempty"`
+}
+
+type LogConfig struct {
+	Debug  string `json:"debug"`
+	Access string `json:"access"`
+	Panic  string `json:"panic"`
 }
 
 func Load(path, envHost, envPort, defaultHost, defaultPort string) *Config {
