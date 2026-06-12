@@ -97,11 +97,8 @@ func (e *GojaEngine) executeDebug(jsCode string, skip int, timeoutMs int64) RunR
 			for _, key := range keys {
 				v := varsObj.Get(key)
 				if v != nil {
-					s := v.String()
-					if len(s) > 200 {
-						s = s[:200] + "..."
-					}
-					localVars = append(localVars, fmt.Sprintf("%s: %s", escapeValue(key), escapeValue(s)))
+					s := formatVar(v)
+					localVars = append(localVars, fmt.Sprintf("%s: %s", key, s))
 				}
 			}
 		}
@@ -198,12 +195,12 @@ func urlDecode(s string) string {
 	return decoded
 }
 
-func escapeValue(s string) string {
+func formatVar(v goja.Value) string {
+	s := v.String()
 	s = strings.ReplaceAll(s, "\n", "\\n")
 	s = strings.ReplaceAll(s, "\x00", "")
-	return s
-}
-
-func unescapeValue(s string) string {
+	if len(s) > 80 {
+		s = s[:80] + "..."
+	}
 	return s
 }
