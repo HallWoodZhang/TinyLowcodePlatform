@@ -148,16 +148,19 @@ editor.on('gutterClick', (cm, n) => {
   toggleBreakpoint(n + 1);
 });
 
-// fallback: attach click to gutter DOM element
-setTimeout(() => {
-  const gutters = document.querySelector('#editor-wrap .CodeMirror-gutters');
-  if (gutters) {
-    gutters.addEventListener('click', (e) => {
-      const line = editor.lineAtHeight(e.offsetY);
-      if (line >= 0) toggleBreakpoint(line + 1);
-    });
-  }
-}, 200);
+// Alternative gutter click via DOM event (more reliable cross-browser)
+const gutterEl = document.querySelector('#editor-wrap .CodeMirror-gutters');
+if (gutterEl) {
+  gutterEl.addEventListener('click', function(e) {
+    const rect = this.getBoundingClientRect();
+    const y = e.clientY - rect.top + this.scrollTop;
+    const lineHeight = editor.defaultTextHeight();
+    const line = Math.floor(y / lineHeight);
+    if (line >= 0 && line < editor.lineCount()) {
+      toggleBreakpoint(line + 1);
+    }
+  });
+}
 editor.on('changes', () => {
   const t = activeTab();
   if (t) { t.code = editor.getValue(); t.dirty = true; renderTabs(); }
