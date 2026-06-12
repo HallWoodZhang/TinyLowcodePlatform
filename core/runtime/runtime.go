@@ -26,7 +26,7 @@ func (e *QuickJSEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLi
 	}
 	jsLines := mapTSBreakpointsToJS(mapper, bps)
 	if len(jsLines) > 0 {
-		jsCode = instrumentCode(jsCode, jsLines)
+		jsCode = instrumentCode(jsCode, jsLines, nil)
 	}
 	result := e.execute(jsCode)
 	for i := range result.Breakpoints {

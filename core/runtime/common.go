@@ -110,13 +110,22 @@ func findJSLineForTS(mapper *sm.Consumer, tsLine int) int {
 	return 0
 }
 
-func instrumentCode(jsCode string, jsLines []int) string {
+func instrumentCode(jsCode string, jsLines []int, lineVars map[int][]string) string {
 	parts := strings.Split(jsCode, "\n")
 	sort.Sort(sort.Reverse(sort.IntSlice(jsLines)))
 	for _, line := range jsLines {
 		idx := line - 1
 		if idx >= 0 && idx < len(parts) {
-			parts[idx] = fmt.Sprintf("__dbg(%d);", line) + parts[idx]
+			vars := lineVars[line]
+			if len(vars) > 0 {
+				varNames := make([]string, len(vars))
+				for i, v := range vars {
+					varNames[i] = fmt.Sprintf("%s:%s", v, v)
+				}
+				parts[idx] = fmt.Sprintf("__dbg(%d,{%s});", line, strings.Join(varNames, ",")) + parts[idx]
+			} else {
+				parts[idx] = fmt.Sprintf("__dbg(%d);", line) + parts[idx]
+			}
 		}
 	}
 	return strings.Join(parts, "\n")

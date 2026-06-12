@@ -25,8 +25,18 @@ func (e *GojaEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLine,
 		return RunResult{Error: err.Error()}
 	}
 	jsLines := mapTSBreakpointsToJS(mapper, bps)
+
+	// Build variable name map for each breakpoint line
+	lineVars := make(map[int][]string)
+	for _, jsLine := range jsLines {
+		vars := FindScopeVars(jsCode, jsLine)
+		if len(vars) > 0 {
+			lineVars[jsLine] = vars
+		}
+	}
+
 	if len(jsLines) > 0 {
-		jsCode = instrumentCode(jsCode, jsLines)
+		jsCode = instrumentCode(jsCode, jsLines, lineVars)
 	}
 	result := e.execute(jsCode, timeoutMs)
 	for i := range result.Breakpoints {
@@ -73,23 +83,24 @@ func (e *GojaEngine) execute(jsCode string, timeoutMs int64) RunResult {
 			stackLines = append(stackLines, fmt.Sprintf("    at %s (%s:%d)", frame.FuncName(), frame.Position().Filename, frame.Position().Line))
 		}
 
-		var globals []string
-		globalObj := vm.GlobalObject()
-		for _, key := range globalObj.Keys() {
-			v := globalObj.Get(key)
-			if v == nil {
-				continue
+		var localVars []string
+		if len(call.Arguments) > 1 {
+			varsObj := call.Arguments[1].ToObject(vm)
+			for _, key := range varsObj.Keys() {
+				v := varsObj.Get(key)
+				if v != nil {
+					s := v.String()
+					if len(s) > 200 {
+						s = s[:200] + "..."
+					}
+					localVars = append(localVars, fmt.Sprintf("%s: %s", key, s))
+				}
 			}
-			s := v.String()
-			if len(s) > 200 {
-				s = s[:200] + "..."
-			}
-			globals = append(globals, fmt.Sprintf("%s: %s", key, s))
 		}
 
 		bpOutput.WriteString(fmt.Sprintf("__DBG_LINE__:%d\n", line))
 		bpOutput.WriteString(fmt.Sprintf("__DBG_STACK__:%s\n", strings.Join(stackLines, "\\n")))
-		bpOutput.WriteString(fmt.Sprintf("__DBG_GLOBALS__:%s\n", strings.Join(globals, "|")))
+		bpOutput.WriteString(fmt.Sprintf("__DBG_GLOBALS__:%s\n", strings.Join(localVars, "|")))
 		return goja.Undefined()
 	})
 
