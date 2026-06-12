@@ -24,8 +24,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 #run-btn:hover { background: #74c7ec; }
 #run-sel-btn { background: #45475a; color: #cdd6f4; }
 #run-sel-btn:hover { background: #585b70; }
-#sql-editor { width: 100%; height: 160px; min-height: 120px; background: #1e1e2e; color: #cdd6f4; border: none; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; line-height: 1.6; resize: vertical; outline: none; tab-size: 2; }
+
+.editor-wrapper { height: 160px; min-height: 120px; display: flex; overflow: hidden; resize: vertical; }
+.editor-wrapper .line-gutter { width: 40px; min-width: 40px; background: #181825; border-right: 1px solid #313244; overflow: hidden; user-select: none; text-align: right; padding: 12px 6px 12px 0; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.6; color: #585b70; }
+.editor-pane { flex: 1; position: relative; overflow: hidden; }
+#code-highlight, #sql-editor {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px; line-height: 1.6; tab-size: 2;
+  padding: 12px 16px; margin: 0; border: none; outline: none;
+  white-space: pre; overflow: auto; word-wrap: normal;
+}
+#code-highlight { background: #1e1e2e; color: #cdd6f4; z-index: 1; }
+#sql-editor { background: transparent; color: transparent; caret-color: #cba6f7; z-index: 2; resize: none; }
 #sql-editor::placeholder { color: #585b70; }
+
 .result-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .result-header { padding: 8px 16px; background: #181825; border-bottom: 1px solid #313244; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .result-header h3 { font-size: 12px; color: #a6adc8; }
@@ -36,13 +49,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .format-toggle button.active { background: #45475a; color: #cdd6f4; }
 #result { flex: 1; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; overflow: auto; margin: 0; }
 .error-text { color: #f38ba8; }
-#json-result { flex: 1; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; overflow: auto; margin: 0; display: none; }
-#table-result { display: block; }
-#json-result { display: none; }
 .result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .result-table th { background: #313244; padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #45475a; position: sticky; top: 0; }
 .result-table td { padding: 6px 12px; border-bottom: 1px solid #313244; }
 .result-table tr:hover td { background: #313244; }
+
+.hl-keyword { color: #cba6f7; }
+.hl-string  { color: #a6e3a1; }
+.hl-number  { color: #fab387; }
+.hl-comment { color: #6c7086; font-style: italic; }
+.hl-func    { color: #89dceb; }
 </style>
 </head>
 <body>
@@ -60,8 +76,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
         <button id="run-btn">Run</button>
       </div>
     </div>
-    <textarea id="sql-editor" placeholder="SELECT * FROM scripts LIMIT 10;
+    <div class="editor-wrapper">
+      <div class="line-gutter" id="line-gutter"></div>
+      <div class="editor-pane">
+        <pre id="code-highlight"><code></code></pre>
+        <textarea id="sql-editor" placeholder="SELECT * FROM scripts LIMIT 10;
 EXPLAIN QUERY PLAN SELECT * FROM scripts WHERE type = 'typescript';" spellcheck="false"></textarea>
+      </div>
+    </div>
   </div>
   <div class="result-area">
     <div class="result-header">
@@ -84,8 +106,39 @@ let lastResult = null;
 const $ = id => document.getElementById(id);
 const tableList = $('table-list');
 const sqlEditor = $('sql-editor');
+const codeHigh = $('code-highlight').firstElementChild;
+const lineGutter = $('line-gutter');
 const resultEl = $('result');
 const rowCount = $('row-count');
+
+const KW = /\b(?:SELECT|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|LIKE|BETWEEN|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|TABLE|DROP|ALTER|ADD|COLUMN|INDEX|PRIMARY|KEY|FOREIGN|REFERENCES|DISTINCT|UNION|ALL|EXISTS|CASE|WHEN|THEN|ELSE|END|ASC|DESC|EXPLAIN|QUERY|PLAN|WITH|RECURSIVE|PRAGMA|BEGIN|COMMIT|ROLLBACK|TRANSACTION|COUNT|SUM|AVG|MIN|MAX|CAST|COALESCE)\b/gi;
+
+function highlight(sql) {
+  let html = esc(sql);
+  html = html.replace(/(--[^\n]*)/g, '<span class="hl-comment">$1</span>');
+  html = html.replace(/('(?:[^'\\]|\\.)*')/g, '<span class="hl-string">$1</span>');
+  html = html.replace(/(\b\d+\.?\d*\b)/g, '<span class="hl-number">$1</span>');
+  html = html.replace(KW, '<span class="hl-keyword">$1</span>');
+  html = html.replace(/(\w+)(?=\s*\()/g, '<span class="hl-func">$1</span>');
+  return html;
+}
+
+function updateHighlight() {
+  const text = sqlEditor.value;
+  const lines = text.split('\n');
+  const nums = lines.map((_, i) => i + 1).join('\n');
+  if (lineGutter.textContent !== nums) {
+    lineGutter.textContent = nums;
+  }
+  codeHigh.innerHTML = highlight(text) + '\n';
+}
+
+sqlEditor.addEventListener('input', updateHighlight);
+sqlEditor.addEventListener('scroll', () => {
+  codeHigh.parentElement.scrollTop = sqlEditor.scrollTop;
+  codeHigh.parentElement.scrollLeft = sqlEditor.scrollLeft;
+  lineGutter.scrollTop = sqlEditor.scrollTop;
+});
 
 async function loadTables() {
   const res = await fetch(API_TABLES);
@@ -95,7 +148,7 @@ async function loadTables() {
     const li = document.createElement('li');
     li.textContent = name;
     li.title = 'Click to select table';
-    li.onclick = () => { sqlEditor.value = 'SELECT * FROM ' + name + ' LIMIT 100;'; sqlEditor.focus(); };
+    li.onclick = () => { sqlEditor.value = 'SELECT * FROM ' + name + ' LIMIT 100;'; updateHighlight(); sqlEditor.focus(); };
     tableList.appendChild(li);
   }
 }
@@ -183,6 +236,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+updateHighlight();
 loadTables();
 </script>
 </body>
