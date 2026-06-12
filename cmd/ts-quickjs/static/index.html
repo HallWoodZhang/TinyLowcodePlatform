@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TS QuickJS Runner</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1e1e2e; color: #cdd6f4; height: 100vh; overflow: hidden; }
+.app { display: flex; height: 100vh; }
+.sidebar { width: 260px; min-width: 260px; background: #181825; border-right: 1px solid #313244; display: flex; flex-direction: column; }
+.sidebar-header { padding: 16px; border-bottom: 1px solid #313244; display: flex; justify-content: space-between; align-items: center; }
+.sidebar-header h2 { font-size: 15px; font-weight: 600; }
+#new-btn { background: #cba6f7; color: #1e1e2e; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; }
+#new-btn:hover { background: #b4befe; }
+#snippet-list { list-style: none; overflow-y: auto; flex: 1; }
+#snippet-list li { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #313244; display: flex; justify-content: space-between; align-items: center; transition: background 0.15s; }
+#snippet-list li:hover { background: #313244; }
+#snippet-list li.active { background: #45475a; border-left: 3px solid #cba6f7; }
+.snippet-info { overflow: hidden; }
+.snippet-label-display { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snippet-name-display { font-size: 11px; color: #a6adc8; margin-top: 2px; }
+.delete-btn { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 18px; padding: 2px 6px; line-height: 1; border-radius: 4px; }
+.delete-btn:hover { color: #eba0ac; background: #313244; }
+.editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.editor-header { padding: 10px 16px; border-bottom: 1px solid #313244; display: flex; gap: 12px; align-items: center; background: #181825; }
+.editor-header input { background: #313244; border: 1px solid #45475a; color: #cdd6f4; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
+.editor-header input:focus { outline: none; border-color: #cba6f7; }
+#name-input { width: 170px; }
+#label-input { flex: 1; max-width: 280px; }
+.actions { margin-left: auto; display: flex; gap: 8px; }
+.actions button { padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; }
+#save-btn { background: #a6e3a1; color: #1e1e2e; }
+#save-btn:hover { background: #94e2d5; }
+#run-btn { background: #89b4fa; color: #1e1e2e; }
+#run-btn:hover { background: #74c7ec; }
+#code-editor { flex: 1; background: #1e1e2e; color: #cdd6f4; border: none; padding: 16px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 14px; line-height: 1.6; resize: none; outline: none; tab-size: 2; }
+#code-editor::placeholder { color: #585b70; }
+.output-area { height: 200px; min-height: 200px; border-top: 1px solid #313244; background: #11111b; display: flex; flex-direction: column; }
+.output-area h3 { padding: 8px 16px; font-size: 12px; color: #a6adc8; border-bottom: 1px solid #313244; flex-shrink: 0; }
+#output { flex: 1; padding: 12px 16px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; overflow-y: auto; margin: 0; }
+.error-text { color: #f38ba8; }
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <h2>Snippets</h2>
+    <button id="new-btn">+ New</button>
+  </div>
+  <ul id="snippet-list"></ul>
+</aside>
+<main class="editor-area">
+  <div class="editor-header">
+    <input id="name-input" placeholder="name (unique id)" spellcheck="false" />
+    <input id="label-input" placeholder="display name" spellcheck="false" />
+    <div class="actions">
+      <button id="save-btn">Save</button>
+      <button id="run-btn">Run ▸</button>
+    </div>
+  </div>
+  <textarea id="code-editor" placeholder="// TypeScript code here...
+const msg: string = 'Hello, QuickJS!';
+console.log(msg);" spellcheck="false"></textarea>
+  <div class="output-area">
+    <h3>Output</h3>
+    <pre id="output"></pre>
+  </div>
+</main>
+</div>
+<script>
+const API = '/api/snippets';
+let currentId = null;
+
+const $ = id => document.getElementById(id);
+const listEl = $('snippet-list');
+const nameEl = $('name-input');
+const labelEl = $('label-input');
+const codeEl = $('code-editor');
+const outputEl = $('output');
+
+async function loadList() {
+  const res = await fetch(API);
+  const snippets = await res.json();
+  listEl.innerHTML = '';
+  snippets.forEach(s => {
+    const li = document.createElement('li');
+    li.innerHTML = `<div class="snippet-info"><div class="snippet-label-display">${esc(s.label)}</div><div class="snippet-name-display">${esc(s.name)}</div></div>`;
+    const delBtn = document.createElement('button');
+    delBtn.className = 'delete-btn';
+    delBtn.textContent = '\u00D7';
+    delBtn.title = 'Delete';
+    delBtn.onclick = (e) => { e.stopPropagation(); deleteSnippet(s.id); };
+    li.appendChild(delBtn);
+    li.onclick = () => selectSnippet(s.id);
+    if (s.id === currentId) li.classList.add('active');
+    listEl.appendChild(li);
+  });
+}
+
+async function selectSnippet(id) {
+  currentId = id;
+  const res = await fetch(`${API}/${id}`);
+  if (!res.ok) return;
+  const s = await res.json();
+  nameEl.value = s.name;
+  labelEl.value = s.label;
+  codeEl.value = s.tsCode;
+  outputEl.textContent = '';
+  outputEl.className = '';
+  loadList();
+}
+
+async function saveSnippet() {
+  const payload = {
+    name: nameEl.value.trim(),
+    label: labelEl.value.trim(),
+    tsCode: codeEl.value,
+  };
+  if (!payload.name) { alert('Name is required'); return; }
+  if (!payload.label) { alert('Label is required'); return; }
+  let res;
+  if (currentId) {
+    res = await fetch(`${API}/${currentId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } else {
+    res = await fetch(API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert('Save failed: ' + (data.error || res.statusText));
+    return;
+  }
+  const snippet = await res.json();
+  currentId = snippet.id;
+  await loadList();
+}
+
+async function runSnippet() {
+  if (!currentId) {
+    await saveSnippet();
+    if (!currentId) return;
+  }
+  outputEl.textContent = 'Running...';
+  outputEl.className = '';
+  const res = await fetch(`${API}/${currentId}/run`, { method: 'POST' });
+  const result = await res.json();
+  outputEl.textContent = result.error || result.output || '(no output)';
+  if (result.error) outputEl.className = 'error-text';
+}
+
+async function deleteSnippet(id) {
+  if (!confirm('Delete this snippet?')) return;
+  await fetch(`${API}/${id}`, { method: 'DELETE' });
+  if (currentId === id) newSnippet();
+  await loadList();
+}
+
+function newSnippet() {
+  currentId = null;
+  nameEl.value = '';
+  labelEl.value = '';
+  codeEl.value = '';
+  outputEl.textContent = '';
+  outputEl.className = '';
+}
+
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+$('new-btn').onclick = () => { newSnippet(); loadList(); };
+$('save-btn').onclick = saveSnippet;
+$('run-btn').onclick = runSnippet;
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveSnippet(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runSnippet(); }
+});
+
+loadList();
+</script>
+</body>
+</html>
