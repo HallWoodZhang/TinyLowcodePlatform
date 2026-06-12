@@ -38,8 +38,9 @@ func main() {
 	defer database.Close()
 
 	h := &handler.Handler{
-		Store:  database,
-		Runner: &runtime.Engine{},
+		Store:   database,
+		Runner:  &runtime.Engine{},
+		BpStore: database,
 	}
 
 	mux := http.NewServeMux()
@@ -69,6 +70,10 @@ func main() {
 	mux.HandleFunc("PUT /api/scripts/{id}", h.UpdateScript)
 	mux.HandleFunc("DELETE /api/scripts/{id}", h.DeleteScript)
 	mux.HandleFunc("POST /api/scripts/{id}/run", h.RunScript)
+	mux.HandleFunc("POST /api/scripts/{id}/debug", h.DebugScript)
+	mux.HandleFunc("GET /api/scripts/{id}/breakpoints", h.ListBreakpoints)
+	mux.HandleFunc("POST /api/scripts/{id}/breakpoints", h.SetBreakpoint)
+	mux.HandleFunc("DELETE /api/scripts/{id}/breakpoints/{line}", h.DeleteBreakpoint)
 
 	var srv http.Handler = mux
 	srv = logger.AccessLog(logs.AccessL)(srv)

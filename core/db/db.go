@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"time"
 
@@ -78,6 +79,17 @@ func New(path string) (*DB, error) {
 			db.Close()
 			return nil, err
 		}
+	}
+
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS breakpoints (
+		script_id INTEGER NOT NULL,
+		line INTEGER NOT NULL,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		PRIMARY KEY (script_id, line),
+		FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE
+	)`); err != nil {
+		db.Close()
+		return nil, err
 	}
 
 	return &DB{db}, nil
@@ -217,5 +229,41 @@ func (d *DB) Update(id int64, name, label, scriptType, tsCode *string) (*Script,
 
 func (d *DB) Delete(id int64) error {
 	_, err := d.Exec(`DELETE FROM scripts WHERE id = ?`, id)
+	return err
+}
+
+type Breakpoint struct {
+	ScriptID string `json:"scriptId"`
+	Line     int    `json:"line"`
+	Enabled  bool   `json:"enabled"`
+}
+
+func (d *DB) ListBreakpoints(scriptID int64) ([]Breakpoint, error) {
+	rows, err := d.Query(`SELECT script_id, line, enabled FROM breakpoints WHERE script_id = ? ORDER BY line`, scriptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var bps []Breakpoint
+	for rows.Next() {
+		var bp Breakpoint
+		var sid int64
+		if err := rows.Scan(&sid, &bp.Line, &bp.Enabled); err != nil {
+			return nil, err
+		}
+		bp.ScriptID = fmt.Sprintf("%d", sid)
+		bps = append(bps, bp)
+	}
+	return bps, rows.Err()
+}
+
+func (d *DB) SetBreakpoint(scriptID int64, line int, enabled bool) error {
+	_, err := d.Exec(`INSERT OR REPLACE INTO breakpoints (script_id, line, enabled) VALUES (?, ?, ?)`,
+		scriptID, line, enabled)
+	return err
+}
+
+func (d *DB) DeleteBreakpoint(scriptID int64, line int) error {
+	_, err := d.Exec(`DELETE FROM breakpoints WHERE script_id = ? AND line = ?`, scriptID, line)
 	return err
 }
