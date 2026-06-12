@@ -331,20 +331,11 @@ func executeJS(jsCode string, mapper *sm.Consumer) RunResult {
 		bpOutput.WriteString(fmt.Sprintf("__DBG_LINE__:%s\n", line))
 		bpOutput.WriteString(fmt.Sprintf("__DBG_STACK__:%s\n", strings.ReplaceAll(stack, "\n", "\\n")))
 		bpOutput.WriteString(fmt.Sprintf("__DBG_GLOBALS__:%s\n", gStr))
-		return ctx.ThrowInternalError("__BP_STOP__")
+		return ctx.Null()
 	}))
 
 	result, err := jsCtx.EvalFile(jsCode, qjs.EVAL_GLOBAL, "script.ts")
 	if err != nil {
-		if bpOutput.Len() > 0 {
-			// Breakpoint stop: return captured data
-			runResult := RunResult{}
-			if output.Len() > 0 {
-				runResult.Output = output.String()
-			}
-			runResult.Breakpoints = parseBpHits(bpOutput.String())
-			return runResult
-		}
 		return RunResult{
 			Output: output.String(),
 			Error:  "JavaScript runtime error: " + mapJSError(err, mapper),
