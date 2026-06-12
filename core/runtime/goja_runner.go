@@ -77,7 +77,7 @@ func (e *GojaEngine) execute(jsCode string, timeoutMs int64) RunResult {
 		if len(call.Arguments) > 0 {
 			line = int(call.Arguments[0].ToInteger())
 		}
-		stack := vm.CaptureCallStack(2, nil)
+		stack := vm.CaptureCallStack(50, nil)
 		var stackLines []string
 		for _, frame := range stack {
 			stackLines = append(stackLines, fmt.Sprintf("    at %s (%s:%d)", frame.FuncName(), frame.Position().Filename, frame.Position().Line))
@@ -101,6 +101,7 @@ func (e *GojaEngine) execute(jsCode string, timeoutMs int64) RunResult {
 		bpOutput.WriteString(fmt.Sprintf("__DBG_LINE__:%d\n", line))
 		bpOutput.WriteString(fmt.Sprintf("__DBG_STACK__:%s\n", strings.Join(stackLines, "\\n")))
 		bpOutput.WriteString(fmt.Sprintf("__DBG_GLOBALS__:%s\n", strings.Join(localVars, "|")))
+		vm.Interrupt("__BP_STOP__")
 		return goja.Undefined()
 	})
 
@@ -111,6 +112,14 @@ func (e *GojaEngine) execute(jsCode string, timeoutMs int64) RunResult {
 
 	val, err := vm.RunString(jsCode)
 	if err != nil {
+		if bpOutput.Len() > 0 {
+			runResult := RunResult{}
+			if output.Len() > 0 {
+				runResult.Output = output.String()
+			}
+			runResult.Breakpoints = parseGojaBpHits(bpOutput.String())
+			return runResult
+		}
 		return RunResult{
 			Output: output.String(),
 			Error:  "Runtime error: " + err.Error(),

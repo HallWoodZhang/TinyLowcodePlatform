@@ -53,6 +53,8 @@ func walkNode(n ast.Node, offset int, result *[]string) {
 		walkStmtList(st.List, nil, offset, result)
 	case *ast.VariableStatement:
 		collectBindings(st.List, result)
+	case *ast.LexicalDeclaration:
+		collectBindings(st.List, result)
 	case *ast.FunctionDeclaration:
 		if st.Function != nil {
 			for _, p := range st.Function.ParameterList.List {
@@ -81,6 +83,9 @@ func walkNode(n ast.Node, offset int, result *[]string) {
 			if vs, ok := st.Initializer.(ast.Node); ok {
 				if vstmt, ok := vs.(*ast.VariableStatement); ok {
 					collectBindings(vstmt.List, result)
+				}
+				if ldecl, ok := vs.(*ast.LexicalDeclaration); ok {
+					collectBindings(ldecl.List, result)
 				}
 			}
 			walkNode(st.Body, offset, result)
