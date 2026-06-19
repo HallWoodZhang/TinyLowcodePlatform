@@ -19,3 +19,4 @@ coverage.out
 coverage.html
 STANDARDS.md
 .jwt_secret
+auth-server
