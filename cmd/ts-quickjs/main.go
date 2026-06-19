@@ -99,6 +99,7 @@ func main() {
 	mux.Handle("DELETE /api/scripts/{id}/breakpoints/{line}", authMW(http.HandlerFunc(h.DeleteBreakpoint)))
 
 	var srv http.Handler = mux
+	srv = logger.CORSMiddleware()(srv)
 	srv = logger.AccessLog(logs.AccessL)(srv)
 	srv = logger.Recovery(logs.PanicL)(srv)
 	srv = logger.TraceMiddleware(logs.DebugL)(srv)

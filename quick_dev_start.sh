@@ -142,22 +142,33 @@ with open('$conf', 'w') as f:
     sleep 1
 
     # 8. health check
-    wait_for 9722 "http://127.0.0.1:9722/auth/ui/login.html" "auth-server"
-    wait_for 9724 "http://127.0.0.1:9724/bff/ui/index.html"   "bff-server"
-    wait_for 9720 "http://127.0.0.1:9720/ts-quickjs/ui/index.html" "ts-quickjs"
-    wait_for 9721 "http://127.0.0.1:9721/api/sql/tables"      "sql-runner"
-    wait_for 9723 "http://127.0.0.1:9723/api/admin/tenants"   "admin-server"
+    wait_for 9722 "http://127.0.0.1:9722/api/auth/login"   "auth-server"
+    wait_for 9724 "http://127.0.0.1:9724/api/bff/version"   "bff-server"
+    wait_for 9720 "http://127.0.0.1:9720/api/scripts"       "ts-quickjs"
+    wait_for 9721 "http://127.0.0.1:9721/api/sql/tables"     "sql-runner"
+    wait_for 9723 "http://127.0.0.1:9723/api/admin/tenants"  "admin-server"
 
-    # 9. summary
+    # 9. start Vue frontend dev server
+    if [ -d "$SCRIPT_DIR/frontend/node_modules" ]; then
+        info "Starting Vue frontend dev server..."
+        cd "$SCRIPT_DIR/frontend" && npm run dev -- --host 0.0.0.0 > /tmp/vite-dev.log 2>&1 &
+        cd "$SCRIPT_DIR"
+        sleep 2
+        wait_for 5173 "http://127.0.0.1:5173" "Vue frontend"
+    fi
+
+    # 10. summary
     echo ""
     echo "  ┌─────────────────────────────────────────────┐"
     echo "  │  Tiny Lowcode Platform v2.0.0 Gateway       │"
     echo "  ├─────────────────────────────────────────────┤"
-    echo "  │  Portal:   http://127.0.0.1:9724            │"
-    echo "  │  Login:    http://127.0.0.1:9722            │"
-    echo "  │  Admin:    http://127.0.0.1:9723            │"
-    echo "  │  Scripts:  http://127.0.0.1:9720            │"
-    echo "  │  SQL:      http://127.0.0.1:9721            │"
+    echo "  │  Frontend: http://127.0.0.1:5173            │"
+    echo "  │  ───────────────────────────────────────    │"
+    echo "  │  Auth API:  http://127.0.0.1:9722           │"
+    echo "  │  BFF API:   http://127.0.0.1:9724           │"
+    echo "  │  Admin API: http://127.0.0.1:9723           │"
+    echo "  │  Scripts:   http://127.0.0.1:9720           │"
+    echo "  │  SQL:       http://127.0.0.1:9721           │"
     echo "  ├─────────────────────────────────────────────┤"
     echo "  │  Default:  admin / admin / admin123         │"
     echo "  │  Logs:     /tmp/*-server.log                │"

@@ -21,3 +21,5 @@ STANDARDS.md
 .jwt_secret
 auth-server
 bff-server
+frontend/dist/
+frontend/node_modules/
