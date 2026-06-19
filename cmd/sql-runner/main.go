@@ -12,6 +12,7 @@ import (
 	"toy-platform/core/config"
 	"toy-platform/core/handler"
 	"toy-platform/core/logger"
+	"toy-platform/core/validator"
 )
 
 //go:embed static/*
@@ -66,7 +67,7 @@ func main() {
 	mux.Handle("GET /sql-runner/ui/", http.StripPrefix("/sql-runner/ui", fileServer))
 
 	mux.HandleFunc("GET /api/sql/tables", sqlH.ListTables)
-	mux.HandleFunc("POST /api/sql/run", sqlH.RunSQL)
+	mux.Handle("POST /api/sql/run", validator.Middleware(validator.RunSQLSchema)(http.HandlerFunc(sqlH.RunSQL)))
 
 	var srv http.Handler = mux
 	srv = logger.AccessLog(logs.AccessL)(srv)

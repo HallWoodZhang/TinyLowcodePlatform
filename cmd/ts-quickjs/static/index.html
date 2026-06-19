@@ -127,6 +127,7 @@ function activeTab() { return activeIdx >= 0 ? tabs[activeIdx] : null; }
 const $ = id => document.getElementById(id);
 let lastHitCount = 0;
 let debugState = null;
+let breakpointLines = new Set();
 const listEl = $('script-list');
 const nameEl = $('name-input');
 const labelEl = $('label-input');
@@ -334,12 +335,10 @@ function switchOutputTab(name) {
 async function toggleBreakpoint(line) {
   const t = activeTab();
   if (!t || !t.id) return;
-  const info = editor.lineInfo(line - 1);
-  const gutterClass = info.gutterClass || '';
-  const hasBp = gutterClass.indexOf('bp-line') >= 0;
-  if (hasBp) {
+  if (breakpointLines.has(line)) {
     fetch(`${API}/${t.id}/breakpoints/${line}`, { method: 'DELETE' });
     editor.removeLineClass(line - 1, 'gutter', 'bp-line');
+    breakpointLines.delete(line);
   } else {
     fetch(`${API}/${t.id}/breakpoints`, {
       method: 'POST',
@@ -347,6 +346,7 @@ async function toggleBreakpoint(line) {
       body: JSON.stringify({ line, enabled: true }),
     });
     editor.addLineClass(line - 1, 'gutter', 'bp-line');
+    breakpointLines.add(line);
   }
 }
 
@@ -470,6 +470,7 @@ function debugResult(result, t) {
 
 async function loadBreakpoints() {
   const t = activeTab();
+  breakpointLines.clear();
   for (let i = 0; i < editor.lineCount(); i++) {
     editor.removeLineClass(i, 'gutter', 'bp-line');
   }
@@ -478,6 +479,7 @@ async function loadBreakpoints() {
   const bps = await res.json();
   bps.forEach(bp => {
     editor.addLineClass(bp.line - 1, 'gutter', 'bp-line');
+    breakpointLines.add(bp.line);
   });
 }
 

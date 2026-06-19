@@ -15,6 +15,7 @@ import (
 	"toy-platform/core/handler"
 	"toy-platform/core/logger"
 	"toy-platform/core/runtime"
+	"toy-platform/core/validator"
 )
 
 //go:embed static/*
@@ -84,14 +85,14 @@ func main() {
 	mux.Handle("GET /ts-quickjs/ui/", http.StripPrefix("/ts-quickjs/ui", fileServer))
 
 	mux.HandleFunc("GET /api/scripts", h.ListScripts)
-	mux.HandleFunc("POST /api/scripts", h.CreateScript)
+	mux.Handle("POST /api/scripts", validator.Middleware(validator.CreateScriptSchema)(http.HandlerFunc(h.CreateScript)))
 	mux.HandleFunc("GET /api/scripts/{id}", h.GetScript)
-	mux.HandleFunc("PUT /api/scripts/{id}", h.UpdateScript)
+	mux.Handle("PUT /api/scripts/{id}", validator.Middleware(validator.UpdateScriptSchema)(http.HandlerFunc(h.UpdateScript)))
 	mux.HandleFunc("DELETE /api/scripts/{id}", h.DeleteScript)
 	mux.HandleFunc("POST /api/scripts/{id}/run", h.RunScript)
-	mux.HandleFunc("POST /api/scripts/{id}/debug", h.DebugScript)
+	mux.Handle("POST /api/scripts/{id}/debug", validator.Middleware(validator.DebugScriptSchema)(http.HandlerFunc(h.DebugScript)))
 	mux.HandleFunc("GET /api/scripts/{id}/breakpoints", h.ListBreakpoints)
-	mux.HandleFunc("POST /api/scripts/{id}/breakpoints", h.SetBreakpoint)
+	mux.Handle("POST /api/scripts/{id}/breakpoints", validator.Middleware(validator.SetBreakpointSchema)(http.HandlerFunc(h.SetBreakpoint)))
 	mux.HandleFunc("DELETE /api/scripts/{id}/breakpoints/{line}", h.DeleteBreakpoint)
 
 	var srv http.Handler = mux
