@@ -18,3 +18,4 @@ scripts.db
 coverage.out
 coverage.html
 STANDARDS.md
+.jwt_secret
