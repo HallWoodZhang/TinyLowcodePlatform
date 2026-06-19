@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toy Platform v2.0.0 Gateway</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; display: flex; flex-direction: column; }
+.header { padding: 20px 32px; background: #181825; border-bottom: 1px solid #313244; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { font-size: 18px; color: #cba6f7; }
+.header .version { font-size: 11px; color: #585b70; }
+.header .user-info { font-size: 12px; color: #a6adc8; }
+.main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; }
+.card-grid { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 600px; }
+.card { background: #181825; border: 1px solid #313244; border-radius: 12px; padding: 24px 32px; width: 180px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; text-decoration: none; color: #cdd6f4; }
+.card:hover { border-color: #cba6f7; background: #1e1e2e; }
+.card.disabled { opacity: 0.3; pointer-events: none; }
+.card .icon { font-size: 32px; margin-bottom: 8px; }
+.card .label { font-size: 13px; font-weight: 600; }
+.footer { padding: 12px 32px; border-top: 1px solid #313244; text-align: center; font-size: 11px; color: #585b70; }
+.logout-btn { background: none; border: 1px solid #45475a; color: #a6adc8; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+.logout-btn:hover { background: #45475a; }
+</style>
+</head>
+<body>
+<div class="header">
+    <div>
+        <h1>Toy Platform</h1>
+    </div>
+    <div class="user-info">
+        <span id="user-display"></span>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+</div>
+<div class="main">
+    <div class="card-grid" id="entries"></div>
+</div>
+<div class="footer">
+    <span id="version">v2.0.0 Gateway</span>
+</div>
+<script>
+async function init() {
+    try {
+        const vRes = await fetch('/api/bff/version');
+        const vData = await vRes.json();
+        document.getElementById('version').textContent = vData.version + ' ' + vData.codename;
+    } catch(e) {}
+
+    try {
+        const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+        if (!meRes.ok) {
+            window.location.href = 'http://127.0.0.1:9722/auth/ui/login.html';
+            return;
+        }
+        const me = await meRes.json();
+        document.getElementById('user-display').textContent = me.tenantName + '/' + me.username + ' (' + me.role + ')';
+    } catch(e) {
+        window.location.href = 'http://127.0.0.1:9722/auth/ui/login.html';
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/bff/entries', { credentials: 'include' });
+        const entries = await res.json();
+        const grid = document.getElementById('entries');
+        entries.forEach(e => {
+            const card = document.createElement('a');
+            card.className = 'card' + (e.enabled ? '' : ' disabled');
+            card.href = e.enabled ? e.url : '#';
+            card.target = '_blank';
+            card.innerHTML = '<div class="icon">' + getIcon(e.id) + '</div><div class="label">' + e.label + '</div>';
+            grid.appendChild(card);
+        });
+    } catch(e) {
+        console.error(e);
+    }
+}
+
+function getIcon(id) {
+    switch(id) {
+        case 'scripts': return '\u{1F4DD}';
+        case 'sql_runner': return '\u{1F50D}';
+        case 'admin': return '\u{2699}\u{FE0F}';
+        default: return '\u{1F4E6}';
+    }
+}
+
+async function logout() {
+    await fetch('http://127.0.0.1:9722/api/auth/logout', { method: 'POST', credentials: 'include' });
+    window.location.href = 'http://127.0.0.1:9722/auth/ui/login.html';
+}
+
+init();
+</script>
+</body>
+</html>

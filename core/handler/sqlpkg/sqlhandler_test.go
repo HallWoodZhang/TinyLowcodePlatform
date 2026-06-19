@@ -1,4 +1,4 @@
-package handler
+package sqlpkg
 
 import (
 	"encoding/json"
@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"toy-platform/core/sqlstore"
 )
 
 type mockSqlStore struct {
@@ -19,10 +21,12 @@ func (m *mockSqlStore) Query(sql string) ([]string, [][]any, error) {
 	return m.queryFn(sql)
 }
 
+var _ sqlstore.Store = (*mockSqlStore)(nil)
+
 func TestListTables(t *testing.T) {
 	tests := []struct {
 		name       string
-		store      SqlStore
+		store      sqlstore.Store
 		wantStatus int
 		wantBody   string
 	}{
@@ -81,7 +85,7 @@ func TestRunSQL(t *testing.T) {
 	tests := []struct {
 		name       string
 		body       string
-		store      SqlStore
+		store      sqlstore.Store
 		wantStatus int
 		wantError  string
 		wantCols   int

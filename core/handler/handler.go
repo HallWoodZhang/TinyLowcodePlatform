@@ -3,23 +3,16 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 
+	"toy-platform/core/auth"
 	"toy-platform/core/db"
 	"toy-platform/core/runtime"
 )
 
 type Handler struct {
-	Store  db.ScriptStore
+	Store  db.Store
 	Runner runtime.Runner
-	BpStore BreakpointStore
-}
-
-type BreakpointStore interface {
-	ListBreakpoints(scriptID int64) ([]db.Breakpoint, error)
-	SetBreakpoint(scriptID int64, line int, enabled bool) error
-	DeleteBreakpoint(scriptID int64, line int) error
 }
 
 type createReq struct {
@@ -37,7 +30,16 @@ type updateReq struct {
 }
 
 func (h *Handler) ListScripts(w http.ResponseWriter, r *http.Request) {
-	scripts, err := h.Store.List()
+	role := auth.Role(r.Context())
+	tenantID := auth.TenantID(r.Context())
+
+	var scripts []db.ScriptSummary
+	var err error
+	if role == "admin" {
+		scripts, err = h.Store.ListAllScripts()
+	} else {
+		scripts, err = h.Store.ListScripts(tenantID)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -58,7 +60,9 @@ func (h *Handler) CreateScript(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and label are required"})
 		return
 	}
-	script, err := h.Store.Create(req.Name, req.Label, req.Type, req.TSCode)
+
+	tenantID := auth.TenantID(r.Context())
+	script, err := h.Store.CreateScript(tenantID, req.Name, req.Label, req.Type, req.TSCode)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -67,22 +71,32 @@ func (h *Handler) CreateScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetScript(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	id := r.PathValue("id")
+	if id == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	script, err := h.Store.Get(id)
+	script, err := h.Store.GetScript(id)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "script not found"})
 		return
 	}
+
+	role := auth.Role(r.Context())
+	if role != "admin" {
+		tenantID := auth.TenantID(r.Context())
+		if script.TenantID != tenantID {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "script not found"})
+			return
+		}
+	}
+
 	writeJSON(w, http.StatusOK, script)
 }
 
 func (h *Handler) UpdateScript(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	id := r.PathValue("id")
+	if id == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
@@ -91,7 +105,7 @@ func (h *Handler) UpdateScript(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
-	script, err := h.Store.Update(id, req.Name, req.Label, req.Type, req.TSCode)
+	script, err := h.Store.UpdateScript(id, req.Name, req.Label, req.Type, req.TSCode)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -100,12 +114,12 @@ func (h *Handler) UpdateScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteScript(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	id := r.PathValue("id")
+	if id == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	if err := h.Store.Delete(id); err != nil {
+	if err := h.Store.DeleteScript(id); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -113,27 +127,25 @@ func (h *Handler) DeleteScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RunScript(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	id := r.PathValue("id")
+	if id == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	script, err := h.Store.Get(id)
+	script, err := h.Store.GetScript(id)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "script not found"})
 		return
 	}
 
-	var resolver runtime.ScriptResolver
-	if store, ok := h.Store.(interface{ GetByName(string) (*db.Script, error) }); ok {
-		resolver = func(name string) (string, error) {
-			name = strings.TrimPrefix(name, "./")
-			s, err := store.GetByName(name)
-			if err != nil {
-				return "", err
-			}
-			return s.TSCode, nil
+	tenantID := auth.TenantID(r.Context())
+	resolver := func(name string) (string, error) {
+		name = strings.TrimPrefix(name, "./")
+		s, err := h.Store.GetScriptByName(tenantID, name)
+		if err != nil {
+			return "", err
 		}
+		return s.TSCode, nil
 	}
 
 	result := h.Runner.Run(script.TSCode, resolver, 10000)
@@ -147,12 +159,12 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func (h *Handler) ListBreakpoints(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	id := r.PathValue("id")
+	if id == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	bps, err := h.BpStore.ListBreakpoints(id)
+	bps, err := h.Store.ListBreakpoints(id)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -164,8 +176,8 @@ func (h *Handler) ListBreakpoints(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SetBreakpoint(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	id := r.PathValue("id")
+	if id == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
@@ -177,7 +189,7 @@ func (h *Handler) SetBreakpoint(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
-	if err := h.BpStore.SetBreakpoint(id, req.Line, req.Enabled); err != nil {
+	if err := h.Store.SetBreakpoint(id, req.Line, req.Enabled); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -185,17 +197,22 @@ func (h *Handler) SetBreakpoint(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteBreakpoint(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	id := r.PathValue("id")
+	if id == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	line, err := strconv.Atoi(r.PathValue("line"))
-	if err != nil {
+	line := r.PathValue("line")
+	if line == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid line"})
 		return
 	}
-	if err := h.BpStore.DeleteBreakpoint(id, line); err != nil {
+	var lineNum int
+	if err := json.Unmarshal([]byte(line), &lineNum); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid line"})
+		return
+	}
+	if err := h.Store.DeleteBreakpoint(id, lineNum); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -203,8 +220,8 @@ func (h *Handler) DeleteBreakpoint(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DebugScript(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	id := r.PathValue("id")
+	if id == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
@@ -213,27 +230,25 @@ func (h *Handler) DebugScript(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 
-	script, err := h.Store.Get(id)
+	script, err := h.Store.GetScript(id)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "script not found"})
 		return
 	}
-	bps, err := h.BpStore.ListBreakpoints(id)
+	bps, err := h.Store.ListBreakpoints(id)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	var resolver runtime.ScriptResolver
-	if store, ok := h.Store.(interface{ GetByName(string) (*db.Script, error) }); ok {
-		resolver = func(name string) (string, error) {
-			name = strings.TrimPrefix(name, "./")
-			s, err := store.GetByName(name)
-			if err != nil {
-				return "", err
-			}
-			return s.TSCode, nil
+	tenantID := auth.TenantID(r.Context())
+	resolver := func(name string) (string, error) {
+		name = strings.TrimPrefix(name, "./")
+		s, err := h.Store.GetScriptByName(tenantID, name)
+		if err != nil {
+			return "", err
 		}
+		return s.TSCode, nil
 	}
 
 	bpLines := make([]runtime.BpLine, len(bps))

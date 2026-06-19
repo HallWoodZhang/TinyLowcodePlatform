@@ -1,0 +1,10 @@
+{
+    "host": "127.0.0.1",
+    "port": "9723",
+    "jwt_secret": "same-secret-as-auth-server",
+    "log": {
+        "debug": "info",
+        "access": "info",
+        "panic": "error"
+    }
+}

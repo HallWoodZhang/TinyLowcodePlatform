@@ -1,4 +1,40 @@
 services:
+  auth-server:
+    build:
+      context: .
+      dockerfile: cmd/auth-server/Dockerfile
+    ports:
+      - "9722:9722"
+    volumes:
+      - scripts_data:/app
+    environment:
+      - AUTH_HOST=0.0.0.0
+    restart: unless-stopped
+
+  admin-server:
+    build:
+      context: .
+      dockerfile: cmd/admin-server/Dockerfile
+    ports:
+      - "9723:9723"
+    volumes:
+      - scripts_data:/app
+    environment:
+      - ADMIN_HOST=0.0.0.0
+    restart: unless-stopped
+
+  bff-server:
+    build:
+      context: .
+      dockerfile: cmd/bff-server/Dockerfile
+    ports:
+      - "9724:9724"
+    volumes:
+      - scripts_data:/app
+    environment:
+      - BFF_HOST=0.0.0.0
+    restart: unless-stopped
+
   ts-quickjs:
     build:
       context: .

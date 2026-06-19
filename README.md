@@ -1,33 +1,41 @@
-# Toy Platform
+# Toy Platform v2.0.0 "Gateway"
 
-基于 QuickJS 的轻量级 TypeScript 脚本管理平台，包含 TS 执行器和 SQL 数据浏览器两个独立服务。
+基于 QuickJS 的轻量级 TypeScript 脚本管理平台，支持多租户、认证鉴权、功能开关。
+
+## 服务架构
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| **auth-server** | 9722 | 认证服务：登录/登出/签发JWT |
+| **bff-server** | 9724 | 门户首页：功能入口聚合，按 betamap 控制可见性 |
+| **admin-server** | 9723 | 管理服务：租户/用户 CRUD + betamap 管理 (admin only) |
+| **ts-quickjs** | 9720 | TS 脚本编辑器 + CRUD + 执行/调试 (租户隔离) |
+| **sql-runner** | 9721 | SQL 数据浏览器：只读查询目标数据库 (admin only) |
 
 ## 目录结构
 
 ```
 toy-platform/
+├── betamap.def.json              # 全平台功能模块定义
 ├── cmd/
-│   ├── ts-quickjs/          # TS 脚本运行服务
-│   │   ├── main.go
-│   │   ├── conf/
-│   │   │   ├── config.json          # 配置文件（不入库）
-│   │   │   └── config.json.sample   # 配置模板
-│   │   ├── static/
-│   │   │   └── index.html
-│   │   └── bin/
-│   └── sql-runner/          # SQL 数据浏览服务
-│       ├── main.go
-│       ├── conf/
-│       │   ├── config.json
-│       │   └── config.json.sample
-│       ├── static/
-│       │   └── index.html
-│       └── bin/
-├── core/                    # 共享模块
-│   ├── config/              # 配置读取
-│   ├── db/                  # 数据库层（SQLite + Snowflake ID）
-│   ├── handler/             # HTTP 请求处理
-│   └── runtime/             # TypeScript 执行引擎
+│   ├── auth-server/              # 认证服务
+│   ├── bff-server/               # 门户服务
+│   ├── admin-server/             # 管理服务
+│   ├── ts-quickjs/               # TS脚本运行服务
+│   └── sql-runner/               # SQL数据浏览服务
+├── core/
+│   ├── idgen/                    # 前缀ID生成器 (24位hex)
+│   ├── auth/                     # JWT签发/验证 + bcrypt + 中间件
+│   ├── db/                       # 数据层接口 + SQLite/MySQL实现
+│   ├── handler/                  # HTTP处理器
+│   ├── sqlstore/                 # SQL查询目标库抽象 (多驱动)
+│   ├── validator/                # JSON Schema校验
+│   ├── logger/                   # slog日志 + 中间件
+│   ├── config/                   # 配置加载
+│   └── runtime/                  # TypeScript执行引擎
+├── docs/                         # 设计文档
+├── docker-compose.yml            # 5服务编排
+├── docker-compose.dev.yml        # 本地开发依赖 (MySQL + Redis)
 ├── Makefile
 └── go.mod
 ```
@@ -35,83 +43,47 @@ toy-platform/
 ## 快速开始
 
 ```bash
-# 构建所有服务
+# 本地开发 (SQLite，零依赖)
+cp cmd/auth-server/conf/config.json.sample cmd/auth-server/conf/config.json
+# 为所有服务复制 config.json.sample → config.json，确保 jwt_secret 一致
+
+# 构建 + 启动
+make auth && make run-auth     # 认证服务 :9722
+make bff && make run-bff      # 门户首页 :9724
+make admin && make run-admin  # 管理服务 :9723
+make ts && make run-ts        # TS脚本   :9720
+make sql && make run-sql      # SQL查询  :9721
+
+# 或一键构建
 make build
 
-# 分部构建
-make ts          # 仅构建 TS 服务
-make sql         # 仅构建 SQL 服务
-
-# 启动服务
-make run-ts      # TS Runner → http://127.0.0.1:9720
-make run-sql     # SQL Runner → http://127.0.0.1:9721
+# 访问 http://127.0.0.1:9724 进入门户
 ```
 
-访问 `http://127.0.0.1:9720` 自动重定向到 TS Runner 界面。
+## 内置账号
 
-## 配置
-
-每个服务通过配置文件和环境变量设置监听地址和端口：
-
-| 服务 | 配置文件 | 环境变量 | 默认值 |
-|---|---|---|---|
-| ts-quickjs | `cmd/ts-quickjs/conf/config.json` | `TS_HOST` / `TS_PORT` | `127.0.0.1:9720` |
-| sql-runner | `cmd/sql-runner/conf/config.json` | `SQL_HOST` / `SQL_PORT` | `127.0.0.1:9721` |
-
-优先级：环境变量 > 配置文件 > 硬编码默认值
-
-## 服务说明
-
-### TS Runner（ts-quickjs）
-
-TypeScript 脚本在线编辑与执行环境：
-
-- **前端**：侧边栏脚本列表 + CodeMirror 代码编辑器（JS 语法高亮 + 行号） + 运行输出区
-- **后端**：RESTful API，esbuild 编译 TypeScript → QuickJS 执行
-- **特性**：雪花 ID、脚本 CRUD、10 秒超时保护、`Ctrl+S` 保存 / `Ctrl+Enter` 运行
-
-API：
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/ts-quickjs/ui/` | 前端页面 |
-| GET | `/api/scripts` | 脚本列表 |
-| POST | `/api/scripts` | 创建脚本 |
-| GET | `/api/scripts/{id}` | 查询脚本 |
-| PUT | `/api/scripts/{id}` | 更新脚本 |
-| DELETE | `/api/scripts/{id}` | 删除脚本 |
-| POST | `/api/scripts/{id}/run` | 执行脚本 |
-
-### SQL Runner（sql-runner）
-
-SQLite 数据库交互式查询工具：
-
-- **前端**：左侧表列表 + SQL 输入区 + 结果展示（Table / JSON 切换）
-- **后端**：只读连接，仅允许 SELECT / EXPLAIN / WITH
-- **特性**：选中执行（`Ctrl+Shift+Enter`）、EXPLAIN 支持、防 SQL 注入
-
-API：
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/sql-runner/ui/` | 前端页面 |
-| GET | `/api/sql/tables` | 表列表 |
-| POST | `/api/sql/run` | 执行 SQL |
-
-## 技术栈
-
-- **语言**：Go 1.25
-- **JS 引擎**：[quickjs-go](https://github.com/quickjs-go/quickjs-go)
-- **TS 编译**：[esbuild](https://github.com/evanw/esbuild)
-- **数据库**：SQLite（modernc.org/sqlite，纯 Go 实现）
-- **ID 生成**：Snowflake 算法
+| 租户 | 用户 | 密码 | 角色 |
+|------|------|------|------|
+| `admin` | `admin` | `admin123` | 平台管理员 (可查看所有数据) |
 
 ## 开发
 
 ```bash
-make fmt      # 格式化代码
-make vet      # 静态分析
-make lint     # golangci-lint 检查
-make test     # 运行测试
-make clean    # 清理构建产物
+make test      # 运行全部自动化测试
+make cover     # 生成覆盖率报告
+make fmt       # 格式化代码
+make vet       # 静态分析
+make lint      # golangci-lint
+
+# 启动开发依赖 (MySQL + Redis 容器)
+docker compose -f docker-compose.dev.yml up -d
 ```
+
+## 技术栈
+
+- **语言**：Go 1.25+
+- **JS 引擎**：quickjs-go / goja
+- **TS 编译**：esbuild
+- **数据库**：SQLite (modernc.org/sqlite) / MySQL (预留)
+- **认证**：JWT HMAC-SHA256 + bcrypt
+- **ID 生成**：24位 hex 前缀ID (001a/001b/001c/001d)

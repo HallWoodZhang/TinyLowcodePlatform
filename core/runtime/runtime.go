@@ -1,3 +1,5 @@
+//go:build !noquickjs
+
 package runtime
 
 import (

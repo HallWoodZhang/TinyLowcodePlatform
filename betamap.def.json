@@ -1,0 +1,10 @@
+{
+    "modules": {
+        "script_editor":    {"default": true,  "label": "脚本编辑器",   "backend_enforce": false},
+        "script_run":       {"default": true,  "label": "脚本执行",     "backend_enforce": false},
+        "script_debug":     {"default": false, "label": "断点调试",     "backend_enforce": true},
+        "sql_runner":       {"default": false, "label": "SQL查询工具",  "backend_enforce": true},
+        "admin_panel":      {"default": false, "label": "管理面板",     "backend_enforce": true},
+        "user_management":  {"default": false, "label": "用户管理",     "backend_enforce": true}
+    }
+}

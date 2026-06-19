@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - Toy Platform</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1e1e2e; color: #cdd6f4; height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-box { background: #181825; padding: 40px; border-radius: 12px; border: 1px solid #313244; width: 360px; }
+.login-box h1 { font-size: 20px; text-align: center; margin-bottom: 24px; color: #cba6f7; }
+.login-box h1 small { display: block; font-size: 11px; color: #585b70; margin-top: 4px; font-weight: normal; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 12px; color: #a6adc8; margin-bottom: 4px; }
+.form-group input { width: 100%; padding: 10px 12px; background: #313244; border: 1px solid #45475a; border-radius: 6px; color: #cdd6f4; font-size: 14px; }
+.form-group input:focus { outline: none; border-color: #cba6f7; }
+.error-msg { color: #f38ba8; font-size: 12px; margin-bottom: 12px; display: none; }
+#login-btn { width: 100%; padding: 12px; background: #cba6f7; color: #1e1e2e; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+#login-btn:hover { background: #b4befe; }
+#login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div class="login-box">
+    <h1>Toy Platform <small>v2.0.0 Gateway</small></h1>
+    <div class="form-group">
+        <label>Tenant</label>
+        <input id="tenant" placeholder="admin" autocomplete="off">
+    </div>
+    <div class="form-group">
+        <label>Username</label>
+        <input id="username" placeholder="admin" autocomplete="off">
+    </div>
+    <div class="form-group">
+        <label>Password</label>
+        <input id="password" type="password" placeholder="Password" autocomplete="off">
+    </div>
+    <div id="error" class="error-msg"></div>
+    <button id="login-btn" onclick="login()">Login</button>
+</div>
+<script>
+async function login() {
+    const tenant = document.getElementById('tenant').value.trim();
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const errorEl = document.getElementById('error');
+    const btn = document.getElementById('login-btn');
+
+    if (!tenant || !username || !password) {
+        errorEl.textContent = 'All fields required';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Logging in...';
+    errorEl.style.display = 'none';
+
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tenant, username, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            errorEl.textContent = data.error || 'Login failed';
+            errorEl.style.display = 'block';
+            return;
+        }
+        localStorage.setItem('token', data.token);
+        window.location.href = 'http://127.0.0.1:9724/';
+    } catch (e) {
+        errorEl.textContent = 'Network error: ' + e.message;
+        errorEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Login';
+    }
+}
+</script>
+</body>
+</html>

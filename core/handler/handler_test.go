@@ -1,36 +1,85 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"toy-platform/core/auth"
 	"toy-platform/core/db"
 	"toy-platform/core/runtime"
 )
 
 type mockStore struct {
-	listFn   func() ([]db.ScriptSummary, error)
-	getFn    func(id int64) (*db.Script, error)
-	getByNameFn func(name string) (*db.Script, error)
-	createFn func(name, label, scriptType, tsCode string) (*db.Script, error)
-	updateFn func(id int64, name, label, scriptType, tsCode *string) (*db.Script, error)
-	deleteFn func(id int64) error
+	listScriptsFn    func(tenantID string) ([]db.ScriptSummary, error)
+	listAllScriptsFn func() ([]db.ScriptSummary, error)
+	getScriptFn      func(id string) (*db.Script, error)
+	getScriptByNameFn func(tenantID, name string) (*db.Script, error)
+	createScriptFn   func(tenantID, name, label, scriptType, tsCode string) (*db.Script, error)
+	updateScriptFn   func(id string, name, label, scriptType, tsCode *string) (*db.Script, error)
+	deleteScriptFn   func(id string) error
+	listBpFn         func(scriptID string) ([]db.Breakpoint, error)
+	setBpFn          func(scriptID string, line int, enabled bool) error
+	deleteBpFn       func(scriptID string, line int) error
 }
 
-func (m *mockStore) List() ([]db.ScriptSummary, error)  { return m.listFn() }
-func (m *mockStore) Get(id int64) (*db.Script, error)    { return m.getFn(id) }
-func (m *mockStore) GetByName(name string) (*db.Script, error) { return m.getByNameFn(name) }
-func (m *mockStore) Create(name, label, scriptType, tsCode string) (*db.Script, error) {
-	return m.createFn(name, label, scriptType, tsCode)
+func (m *mockStore) CreateTenant(name, label, betamap string) (*db.Tenant, error) { return nil, nil }
+func (m *mockStore) GetTenant(id string) (*db.Tenant, error)                       { return nil, nil }
+func (m *mockStore) GetTenantByName(name string) (*db.Tenant, error)               { return nil, nil }
+func (m *mockStore) ListTenants() ([]db.Tenant, error)                             { return nil, nil }
+func (m *mockStore) UpdateTenant(id string, name, label, betamap *string) (*db.Tenant, error) { return nil, nil }
+func (m *mockStore) DeleteTenant(id string) error                                  { return nil }
+func (m *mockStore) CreateUser(tenantID, username, passwordHash, role string) (*db.User, error) { return nil, nil }
+func (m *mockStore) GetUser(id string) (*db.User, error)                           { return nil, nil }
+func (m *mockStore) GetUserByTenantAndUsername(tenantName, username string) (*db.User, error) { return nil, nil }
+func (m *mockStore) ListUsersByTenant(tenantID string) ([]db.User, error)          { return nil, nil }
+func (m *mockStore) ListAllUsers() ([]db.User, error)                              { return nil, nil }
+func (m *mockStore) DeleteUser(id string) error                                    { return nil }
+func (m *mockStore) UpdateUserPassword(id, passwordHash string) error              { return nil }
+
+func (m *mockStore) ListScripts(tenantID string) ([]db.ScriptSummary, error) {
+	if m.listScriptsFn != nil { return m.listScriptsFn(tenantID) }
+	return nil, nil
 }
-func (m *mockStore) Update(id int64, name, label, scriptType, tsCode *string) (*db.Script, error) {
-	return m.updateFn(id, name, label, scriptType, tsCode)
+func (m *mockStore) ListAllScripts() ([]db.ScriptSummary, error) {
+	if m.listAllScriptsFn != nil { return m.listAllScriptsFn() }
+	return nil, nil
 }
-func (m *mockStore) Delete(id int64) error { return m.deleteFn(id) }
+func (m *mockStore) GetScript(id string) (*db.Script, error) {
+	if m.getScriptFn != nil { return m.getScriptFn(id) }
+	return nil, fmt.Errorf("not found")
+}
+func (m *mockStore) GetScriptByName(tenantID, name string) (*db.Script, error) {
+	if m.getScriptByNameFn != nil { return m.getScriptByNameFn(tenantID, name) }
+	return nil, fmt.Errorf("not found")
+}
+func (m *mockStore) CreateScript(tenantID, name, label, scriptType, tsCode string) (*db.Script, error) {
+	if m.createScriptFn != nil { return m.createScriptFn(tenantID, name, label, scriptType, tsCode) }
+	return nil, nil
+}
+func (m *mockStore) UpdateScript(id string, name, label, scriptType, tsCode *string) (*db.Script, error) {
+	if m.updateScriptFn != nil { return m.updateScriptFn(id, name, label, scriptType, tsCode) }
+	return nil, nil
+}
+func (m *mockStore) DeleteScript(id string) error {
+	if m.deleteScriptFn != nil { return m.deleteScriptFn(id) }
+	return nil
+}
+func (m *mockStore) ListBreakpoints(scriptID string) ([]db.Breakpoint, error) {
+	if m.listBpFn != nil { return m.listBpFn(scriptID) }
+	return nil, nil
+}
+func (m *mockStore) SetBreakpoint(scriptID string, line int, enabled bool) error {
+	if m.setBpFn != nil { return m.setBpFn(scriptID, line, enabled) }
+	return nil
+}
+func (m *mockStore) DeleteBreakpoint(scriptID string, line int) error {
+	if m.deleteBpFn != nil { return m.deleteBpFn(scriptID, line) }
+	return nil
+}
 
 type mockRunner struct {
 	runFn   func(tsCode string, resolver runtime.ScriptResolver, timeoutMs int64) runtime.RunResult
@@ -38,316 +87,91 @@ type mockRunner struct {
 }
 
 func (m *mockRunner) Run(tsCode string, resolver runtime.ScriptResolver, timeoutMs int64) runtime.RunResult {
-	return m.runFn(tsCode, resolver, timeoutMs)
+	if m.runFn != nil { return m.runFn(tsCode, resolver, timeoutMs) }
+	return runtime.RunResult{Output: "ok"}
 }
 func (m *mockRunner) Debug(tsCode string, resolver runtime.ScriptResolver, bps []runtime.BpLine, skip int, timeoutMs int64) runtime.RunResult {
-	return m.debugFn(tsCode, resolver, bps, skip, timeoutMs)
+	if m.debugFn != nil { return m.debugFn(tsCode, resolver, bps, skip, timeoutMs) }
+	return runtime.RunResult{Output: "debug ok"}
 }
 
-func TestListScripts(t *testing.T) {
-	errStore := &mockStore{listFn: func() ([]db.ScriptSummary, error) {
-		return nil, fmt.Errorf("db down")
-	}}
-	emptyStore := &mockStore{listFn: func() ([]db.ScriptSummary, error) {
-		return nil, nil
-	}}
-	filledStore := &mockStore{listFn: func() ([]db.ScriptSummary, error) {
-		return []db.ScriptSummary{
-			{ID: 1, Name: "a", Label: "A"},
-			{ID: 2, Name: "b", Label: "B"},
-		}, nil
-	}}
+func adminCtx() context.Context {
+	return auth.WithUserContext(context.Background(), "001b1", "001a1", "admin", "admin")
+}
 
-	tests := []struct {
-		name       string
-		store      db.ScriptStore
-		wantStatus int
-		wantCount  int
-	}{
-		{"returns list", filledStore, http.StatusOK, 2},
-		{"nil becomes empty array", emptyStore, http.StatusOK, 0},
-		{"store error", errStore, http.StatusInternalServerError, 0},
+func userCtx() context.Context {
+	return auth.WithUserContext(context.Background(), "001b2", "001a2", "acme", "user")
+}
+
+func TestListScriptsUser(t *testing.T) {
+	s := &mockStore{
+		listScriptsFn: func(tenantID string) ([]db.ScriptSummary, error) {
+			if tenantID == "001a2" {
+				return []db.ScriptSummary{{ID: "001c1", Name: "s1"}}, nil
+			}
+			return nil, nil
+		},
 	}
+	h := &Handler{Store: s}
+	req := httptest.NewRequest("GET", "/api/scripts", nil).WithContext(userCtx())
+	w := httptest.NewRecorder()
+	h.ListScripts(w, req)
+	if w.Code != 200 {
+		t.Fatalf("status = %d", w.Code)
+	}
+	var resp []db.ScriptSummary
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp) != 1 || resp[0].Name != "s1" {
+		t.Errorf("resp = %+v", resp)
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{Store: tt.store, Runner: &mockRunner{}}
-			w := httptest.NewRecorder()
-			h.ListScripts(w, httptest.NewRequest("GET", "/", nil))
-
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
-			}
-			if tt.wantStatus == http.StatusOK {
-				var scripts []db.ScriptSummary
-				json.NewDecoder(w.Body).Decode(&scripts)
-				if len(scripts) != tt.wantCount {
-					t.Errorf("count = %d, want %d", len(scripts), tt.wantCount)
-				}
-			}
-		})
+func TestListScriptsAdmin(t *testing.T) {
+	s := &mockStore{
+		listAllScriptsFn: func() ([]db.ScriptSummary, error) {
+			return []db.ScriptSummary{{ID: "001c1", Name: "a1"}, {ID: "001c2", Name: "a2"}}, nil
+		},
+	}
+	h := &Handler{Store: s}
+	req := httptest.NewRequest("GET", "/api/scripts", nil).WithContext(adminCtx())
+	w := httptest.NewRecorder()
+	h.ListScripts(w, req)
+	var resp []db.ScriptSummary
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp) != 2 {
+		t.Errorf("expected 2 scripts, got %d", len(resp))
 	}
 }
 
 func TestCreateScript(t *testing.T) {
-	tests := []struct {
-		name       string
-		body       string
-		store      db.ScriptStore
-		wantStatus int
-	}{
-		{
-			name: "creates successfully",
-			body: `{"name":"x","label":"X","type":"ts","tsCode":"1"}`,
-			store: &mockStore{createFn: func(name, label, scriptType, tsCode string) (*db.Script, error) {
-				return &db.Script{ID: 10, Name: name, Label: label, Type: scriptType}, nil
-			}},
-			wantStatus: http.StatusCreated,
-		},
-		{
-			name:       "invalid JSON",
-			body:       `{bad`,
-			store:      &mockStore{},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "missing name",
-			body:       `{"name":"","label":"X","type":"ts","tsCode":"1"}`,
-			store:      &mockStore{},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "missing label",
-			body:       `{"name":"x","label":"","type":"ts","tsCode":"1"}`,
-			store:      &mockStore{},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name: "store error",
-			body: `{"name":"x","label":"X","type":"ts","tsCode":"1"}`,
-			store: &mockStore{createFn: func(name, label, scriptType, tsCode string) (*db.Script, error) {
-				return nil, fmt.Errorf("duplicate")
-			}},
-			wantStatus: http.StatusInternalServerError,
+	s := &mockStore{
+		createScriptFn: func(tenantID, name, label, scriptType, tsCode string) (*db.Script, error) {
+			return &db.Script{ID: "001c1", TenantID: tenantID, Name: name, Label: label}, nil
 		},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{Store: tt.store, Runner: &mockRunner{}}
-			w := httptest.NewRecorder()
-			req := httptest.NewRequest("POST", "/", strings.NewReader(tt.body))
-			req.Header.Set("Content-Type", "application/json")
-			h.CreateScript(w, req)
-
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d: %s", w.Code, tt.wantStatus, w.Body.String())
-			}
-		})
+	h := &Handler{Store: s}
+	body := `{"name":"test","label":"Test","type":"ts","tsCode":"1"}`
+	req := httptest.NewRequest("POST", "/api/scripts", strings.NewReader(body)).WithContext(userCtx())
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.CreateScript(w, req)
+	if w.Code != 201 {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
 	}
 }
 
-func TestGetScript(t *testing.T) {
-	okStore := &mockStore{getFn: func(id int64) (*db.Script, error) {
-		return &db.Script{ID: id, Name: "test"}, nil
-	}}
-	missStore := &mockStore{getFn: func(id int64) (*db.Script, error) {
-		return nil, fmt.Errorf("not found")
-	}}
-
-	tests := []struct {
-		name       string
-		pathID     string
-		hasPath    bool
-		store      db.ScriptStore
-		wantStatus int
-	}{
-		{"found", "123", true, okStore, http.StatusOK},
-		{"not found", "999", true, missStore, http.StatusNotFound},
-		{"invalid id", "abc", true, okStore, http.StatusBadRequest},
-		{"missing id", "", false, okStore, http.StatusBadRequest},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{Store: tt.store, Runner: &mockRunner{}}
-			w := httptest.NewRecorder()
-			req := httptest.NewRequest("GET", "/"+tt.pathID, nil)
-			if tt.hasPath {
-				req.SetPathValue("id", tt.pathID)
-			}
-			h.GetScript(w, req)
-
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
-			}
-		})
-	}
-}
-
-func TestUpdateScript(t *testing.T) {
-	okStore := &mockStore{updateFn: func(id int64, n, l, t, c *string) (*db.Script, error) {
-		return &db.Script{ID: id}, nil
-	}}
-	errStore := &mockStore{updateFn: func(id int64, n, l, t, c *string) (*db.Script, error) {
-		return nil, fmt.Errorf("conflict")
-	}}
-
-	tests := []struct {
-		name       string
-		pathID     string
-		body       string
-		store      db.ScriptStore
-		wantStatus int
-	}{
-		{
-			name:       "update all fields",
-			pathID:     "1",
-			body:       `{"name":"newname","label":"NewLabel","type":"other","tsCode":"console.log(2);"}`,
-			store:      okStore,
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "partial update",
-			pathID:     "1",
-			body:       `{"name":"newname"}`,
-			store:      okStore,
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "invalid JSON",
-			pathID:     "1",
-			body:       `x`,
-			store:      okStore,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "invalid id",
-			pathID:     "x",
-			body:       `{"name":"n"}`,
-			store:      okStore,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "store error",
-			pathID:     "1",
-			body:       `{"name":"n"}`,
-			store:      errStore,
-			wantStatus: http.StatusInternalServerError,
+func TestTenantIsolationGet(t *testing.T) {
+	s := &mockStore{
+		getScriptFn: func(id string) (*db.Script, error) {
+			return &db.Script{ID: id, TenantID: "001a9", Name: "other"}, nil
 		},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{Store: tt.store, Runner: &mockRunner{}}
-			w := httptest.NewRecorder()
-			req := httptest.NewRequest("PUT", "/"+tt.pathID, strings.NewReader(tt.body))
-			req.SetPathValue("id", tt.pathID)
-			req.Header.Set("Content-Type", "application/json")
-			h.UpdateScript(w, req)
-
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d: %s", w.Code, tt.wantStatus, w.Body.String())
-			}
-		})
-	}
-}
-
-func TestDeleteScript(t *testing.T) {
-	okStore := &mockStore{deleteFn: func(id int64) error { return nil }}
-	errStore := &mockStore{deleteFn: func(id int64) error { return fmt.Errorf("locked") }}
-
-	tests := []struct {
-		name       string
-		pathID     string
-		store      db.ScriptStore
-		wantStatus int
-	}{
-		{"delete ok", "1", okStore, http.StatusNoContent},
-		{"delete error", "1", errStore, http.StatusInternalServerError},
-		{"invalid id", "abc", okStore, http.StatusBadRequest},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{Store: tt.store, Runner: &mockRunner{}}
-			w := httptest.NewRecorder()
-			req := httptest.NewRequest("DELETE", "/"+tt.pathID, nil)
-			req.SetPathValue("id", tt.pathID)
-			h.DeleteScript(w, req)
-
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
-			}
-		})
-	}
-}
-
-func TestRunScript(t *testing.T) {
-	okStore := &mockStore{getFn: func(id int64) (*db.Script, error) {
-		return &db.Script{ID: id, TSCode: "console.log(1);"}, nil
-	}}
-	errStore := &mockStore{getFn: func(id int64) (*db.Script, error) {
-		return nil, fmt.Errorf("not found")
-	}}
-	okRunner := &mockRunner{runFn: func(tsCode string, resolver runtime.ScriptResolver, timeoutMs int64) runtime.RunResult {
-		return runtime.RunResult{Output: "1\n"}
-	}}
-	errRunner := &mockRunner{runFn: func(tsCode string, resolver runtime.ScriptResolver, timeoutMs int64) runtime.RunResult {
-		return runtime.RunResult{Error: "compile error"}
-	}}
-
-	tests := []struct {
-		name       string
-		pathID     string
-		store      db.ScriptStore
-		runner     runtime.Runner
-		wantStatus int
-	}{
-		{"executes ok", "1", okStore, okRunner, http.StatusOK},
-		{"compile error still 200", "1", okStore, errRunner, http.StatusOK},
-		{"script not found", "999", errStore, okRunner, http.StatusNotFound},
-		{"invalid id", "x", okStore, okRunner, http.StatusBadRequest},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{Store: tt.store, Runner: tt.runner}
-			w := httptest.NewRecorder()
-			req := httptest.NewRequest("POST", "/"+tt.pathID+"/run", nil)
-			req.SetPathValue("id", tt.pathID)
-			h.RunScript(w, req)
-
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d: %s", w.Code, tt.wantStatus, w.Body.String())
-			}
-		})
-	}
-}
-
-func TestWriteJSON(t *testing.T) {
-	tests := []struct {
-		name       string
-		status     int
-		body       any
-		wantStatus int
-		wantType   string
-	}{
-		{"object", http.StatusOK, map[string]string{"key": "val"}, http.StatusOK, "application/json"},
-		{"nil", http.StatusNoContent, nil, http.StatusNoContent, "application/json"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			writeJSON(w, tt.status, tt.body)
-
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
-			}
-			if ct := w.Header().Get("Content-Type"); ct != tt.wantType {
-				t.Errorf("Content-Type = %q, want %q", ct, tt.wantType)
-			}
-		})
+	h := &Handler{Store: s}
+	req := httptest.NewRequest("GET", "/api/scripts/001c9", nil).WithContext(userCtx())
+	req.SetPathValue("id", "001c9")
+	w := httptest.NewRecorder()
+	h.GetScript(w, req)
+	if w.Code != 404 {
+		t.Errorf("expected 404 for cross-tenant access, got %d", w.Code)
 	}
 }

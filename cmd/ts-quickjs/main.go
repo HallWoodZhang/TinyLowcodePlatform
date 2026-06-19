@@ -3,15 +3,15 @@ package main
 import (
 	"context"
 	"embed"
-	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 
+	"toy-platform/core/auth"
 	"toy-platform/core/config"
-	"toy-platform/core/db"
+	"toy-platform/core/db/sqlite"
 	"toy-platform/core/handler"
 	"toy-platform/core/logger"
 	"toy-platform/core/runtime"
@@ -42,25 +42,24 @@ func main() {
 	}
 	logs.DebugL.Info(context.Background(), "ts-runner starting, home=%s", home)
 
-	database, err := db.New(dbPath)
+	store, err := sqlite.New(dbPath)
 	if err != nil {
 		logs.PanicL.Error(context.Background(), "failed to open database: %v", err)
 		log.Fatalf("failed to open database: %v", err)
 	}
-	defer database.Close()
+	defer store.Close()
 
-	var runner runtime.Runner
-	fmt.Printf("engine: %s\n", cfg.Engine)
-	if cfg.Engine == "goja" {
-		runner = &runtime.GojaEngine{}
-	} else {
-		runner = &runtime.QuickJSEngine{}
+	secret := cfg.JWTSecret
+	if len(secret) == 0 {
+		log.Fatal("jwt_secret must be configured (use same secret as auth-server)")
 	}
 
+	var runner runtime.Runner
+	runner = newEngine(cfg.Engine)
+
 	h := &handler.Handler{
-		Store:   database,
-		Runner:  runner,
-		BpStore: database,
+		Store:  store,
+		Runner: runner,
 	}
 
 	mux := http.NewServeMux()
@@ -84,16 +83,19 @@ func main() {
 	fileServer := http.FileServer(http.FS(staticFS))
 	mux.Handle("GET /ts-quickjs/ui/", http.StripPrefix("/ts-quickjs/ui", fileServer))
 
-	mux.HandleFunc("GET /api/scripts", h.ListScripts)
-	mux.Handle("POST /api/scripts", validator.Middleware(validator.CreateScriptSchema)(http.HandlerFunc(h.CreateScript)))
-	mux.HandleFunc("GET /api/scripts/{id}", h.GetScript)
-	mux.Handle("PUT /api/scripts/{id}", validator.Middleware(validator.UpdateScriptSchema)(http.HandlerFunc(h.UpdateScript)))
-	mux.HandleFunc("DELETE /api/scripts/{id}", h.DeleteScript)
-	mux.HandleFunc("POST /api/scripts/{id}/run", h.RunScript)
-	mux.Handle("POST /api/scripts/{id}/debug", validator.Middleware(validator.DebugScriptSchema)(http.HandlerFunc(h.DebugScript)))
-	mux.HandleFunc("GET /api/scripts/{id}/breakpoints", h.ListBreakpoints)
-	mux.Handle("POST /api/scripts/{id}/breakpoints", validator.Middleware(validator.SetBreakpointSchema)(http.HandlerFunc(h.SetBreakpoint)))
-	mux.HandleFunc("DELETE /api/scripts/{id}/breakpoints/{line}", h.DeleteBreakpoint)
+	authMW := auth.AuthMiddleware(secret)
+	bpMW := auth.BetamapMiddleware(store, "script_debug")
+
+	mux.Handle("GET /api/scripts", authMW(http.HandlerFunc(h.ListScripts)))
+	mux.Handle("POST /api/scripts", authMW(validator.Middleware(validator.CreateScriptSchema)(http.HandlerFunc(h.CreateScript))))
+	mux.Handle("GET /api/scripts/{id}", authMW(http.HandlerFunc(h.GetScript)))
+	mux.Handle("PUT /api/scripts/{id}", authMW(validator.Middleware(validator.UpdateScriptSchema)(http.HandlerFunc(h.UpdateScript))))
+	mux.Handle("DELETE /api/scripts/{id}", authMW(http.HandlerFunc(h.DeleteScript)))
+	mux.Handle("POST /api/scripts/{id}/run", authMW(http.HandlerFunc(h.RunScript)))
+	mux.Handle("POST /api/scripts/{id}/debug", authMW(bpMW(validator.Middleware(validator.DebugScriptSchema)(http.HandlerFunc(h.DebugScript)))))
+	mux.Handle("GET /api/scripts/{id}/breakpoints", authMW(http.HandlerFunc(h.ListBreakpoints)))
+	mux.Handle("POST /api/scripts/{id}/breakpoints", authMW(validator.Middleware(validator.SetBreakpointSchema)(http.HandlerFunc(h.SetBreakpoint))))
+	mux.Handle("DELETE /api/scripts/{id}/breakpoints/{line}", authMW(http.HandlerFunc(h.DeleteBreakpoint)))
 
 	var srv http.Handler = mux
 	srv = logger.AccessLog(logs.AccessL)(srv)

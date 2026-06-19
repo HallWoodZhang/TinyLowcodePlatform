@@ -8,14 +8,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"toy-platform/core/auth"
 	"toy-platform/core/config"
 	"toy-platform/core/db/sqlite"
-	"toy-platform/core/handler/sqlpkg"
+	"toy-platform/core/handler/authpkg"
 	"toy-platform/core/logger"
-	"toy-platform/core/sqlstore"
-	"toy-platform/core/validator"
 )
 
 //go:embed static/*
@@ -26,11 +25,11 @@ func main() {
 	if home == "" {
 		home = "."
 	}
-	cfgPath := filepath.Join(home, "cmd/sql-runner/conf/config.json")
-	logDir := filepath.Join(home, "cmd/sql-runner/logs")
+	cfgPath := filepath.Join(home, "cmd/auth-server/conf/config.json")
+	logDir := filepath.Join(home, "cmd/auth-server/logs")
 	dbPath := filepath.Join(home, "scripts.db")
 
-	cfg := config.Load(cfgPath, "SQL_HOST", "SQL_PORT", "127.0.0.1", "9721")
+	cfg := config.Load(cfgPath, "AUTH_HOST", "AUTH_PORT", "127.0.0.1", "9722")
 
 	logLevels := cfg.Log
 	if logLevels == nil {
@@ -40,7 +39,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}
-	logs.DebugL.Info(context.Background(), "sql-runner starting, home=%s", home)
+	logs.DebugL.Info(context.Background(), "auth-server starting, home=%s", home)
 
 	store, err := sqlite.New(dbPath)
 	if err != nil {
@@ -51,15 +50,19 @@ func main() {
 
 	secret := cfg.JWTSecret
 	if len(secret) == 0 {
-		log.Fatal("jwt_secret must be configured (use same secret as auth-server)")
+		secret = auth.NewSecret()
 	}
 
-	sqlH, err := sqlstore.New("sqlite", dbPath)
-	if err != nil {
-		logs.PanicL.Error(context.Background(), "failed to open SQL store: %v", err)
-		log.Fatalf("failed to open SQL store: %v", err)
+	expireHours := cfg.TokenExpireHours
+	if expireHours <= 0 {
+		expireHours = 1
 	}
-	sqlHandler := sqlpkg.New(sqlH)
+
+	h := &authpkg.AuthHandler{
+		Store:       store,
+		TokenSecret: secret,
+		TokenExpire: time.Duration(expireHours) * time.Hour,
+	}
 
 	mux := http.NewServeMux()
 
@@ -70,24 +73,27 @@ func main() {
 	}
 
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/sql-runner/ui/index.html", http.StatusFound)
+		http.Redirect(w, r, "/auth/ui/login.html", http.StatusFound)
 	})
 
-	mux.HandleFunc("GET /sql-runner/ui/index.html", func(w http.ResponseWriter, r *http.Request) {
-		data, _ := fs.ReadFile(staticFS, "index.html")
+	mux.HandleFunc("GET /auth/ui/login.html", func(w http.ResponseWriter, r *http.Request) {
+		data, _ := fs.ReadFile(staticFS, "login.html")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(data)
 	})
 
 	fileServer := http.FileServer(http.FS(staticFS))
-	mux.Handle("GET /sql-runner/ui/", http.StripPrefix("/sql-runner/ui", fileServer))
+	mux.Handle("GET /auth/ui/", http.StripPrefix("/auth/ui", fileServer))
 
+	// public routes
+	mux.HandleFunc("POST /api/auth/login", h.Login)
+	mux.HandleFunc("POST /api/auth/logout", h.Logout)
+
+	// protected routes
 	authMW := auth.AuthMiddleware(secret)
-	adminMW := auth.AdminMiddleware()
-	bpMW := auth.BetamapMiddleware(store, "sql_runner")
-
-	mux.Handle("GET /api/sql/tables", authMW(adminMW(bpMW(http.HandlerFunc(sqlHandler.ListTables)))))
-	mux.Handle("POST /api/sql/run", authMW(adminMW(bpMW(validator.Middleware(validator.RunSQLSchema)(http.HandlerFunc(sqlHandler.RunSQL))))))
+	mux.Handle("GET /api/auth/me", authMW(http.HandlerFunc(h.Me)))
+	mux.Handle("GET /api/auth/betamap", authMW(http.HandlerFunc(h.Betamap)))
+	mux.Handle("POST /api/auth/refresh", authMW(http.HandlerFunc(h.Refresh)))
 
 	var srv http.Handler = mux
 	srv = logger.AccessLog(logs.AccessL)(srv)
@@ -95,6 +101,6 @@ func main() {
 	srv = logger.TraceMiddleware(logs.DebugL)(srv)
 
 	addr := cfg.Address()
-	logs.DebugL.Info(context.Background(), "server starting on http://%s", addr)
+	logs.DebugL.Info(context.Background(), "auth-server starting on http://%s", addr)
 	log.Fatal(http.ListenAndServe(addr, srv))
 }

@@ -7,10 +7,13 @@ import (
 )
 
 type Config struct {
-	Host   string     `json:"host"`
-	Port   string     `json:"port"`
-	Engine string     `json:"engine,omitempty"`
-	Log    *LogConfig `json:"log,omitempty"`
+	Host             string     `json:"host"`
+	Port             string     `json:"port"`
+	Engine           string     `json:"engine,omitempty"`
+	Log              *LogConfig `json:"log,omitempty"`
+	JWTSecret        []byte     `json:"jwt_secret,omitempty"`
+	TokenExpireHours int        `json:"token_expire_hours,omitempty"`
+	RedisAddr        string     `json:"redis_addr,omitempty"`
 }
 
 type LogConfig struct {
