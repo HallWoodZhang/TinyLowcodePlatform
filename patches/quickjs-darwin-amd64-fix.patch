@@ -1,0 +1,11 @@
+--- /Users/hallwood/go/pkg/mod/github.com/quickjs-go/quickjs-go@v0.0.0-20230414054158-b72900cb68c1/quickjs.go	2026-06-19 17:18:15
++++ /Users/hallwood/CodeDir/ToyLowcodePlatform/_patch/quickjs-go/quickjs.go	2026-06-19 19:26:56
+@@ -15,7 +15,7 @@
+ #cgo linux,!android LDFLAGS: -lm -ldl -lpthread
+ #cgo windows,386 LDFLAGS: -L${SRCDIR}/3rdparty/libs/quickjs/windows/x86 -lquickjs
+ #cgo windows,amd64 LDFLAGS: -L${SRCDIR}/3rdparty/libs/quickjs/windows/x86_64 -lquickjs
+-#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/3rdparty/libs/quickjs/darwin -lquickjs
++#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/3rdparty/libs/quickjs/darwin/x86_64 -lquickjs
+ #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/3rdparty/libs/quickjs/darwin/arm64 -lquickjs
+ #cgo android,386 LDFLAGS: -L${SRCDIR}/3rdparty/libs/quickjs/Android/x86 -lquickjs
+ #cgo android,amd64 LDFLAGS: -L${SRCDIR}/3rdparty/libs/quickjs/Android/x86_64 -lquickjs

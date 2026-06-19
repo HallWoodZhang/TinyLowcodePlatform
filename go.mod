@@ -9,8 +9,6 @@ require (
 	modernc.org/sqlite v1.52.0
 )
 
-replace github.com/quickjs-go/quickjs-go => ./_patch/quickjs-go
-
 require (
 	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
 	github.com/dop251/goja v0.0.0-20260607120635-348e6bea910d // indirect
