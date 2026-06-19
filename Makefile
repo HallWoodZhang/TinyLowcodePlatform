@@ -33,7 +33,7 @@ bff:
 	@mkdir -p $(BFF_DIR)/bin
 	go build -ldflags "$(LDFLAGS)" -o $(BFF_BIN) ./$(BFF_DIR)
 
-ts:
+ts: patch-quickjs
 	@mkdir -p $(TS_DIR)/bin
 	go build -ldflags "$(LDFLAGS)" -o $(TS_BIN) ./$(TS_DIR)
 
@@ -70,6 +70,10 @@ run-ts: ts
 
 run-sql: sql
 	./$(SQL_BIN)
+
+# --- quickjs darwin/amd64 patch ---
+patch-quickjs:
+	@sh scripts/patch-quickjs.sh
 
 clean:
 	rm -rf $(AUTH_DIR)/bin $(ADMIN_DIR)/bin $(BFF_DIR)/bin $(TS_DIR)/bin $(SQL_DIR)/bin
