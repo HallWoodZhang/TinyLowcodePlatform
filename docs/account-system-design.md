@@ -716,7 +716,7 @@ classDiagram
 ## 8. 目录结构
 
 ```
-ToyLowcodePlatform/
+TinyLowcodePlatform/
 │
 ├── betamap.def.json                     # [新增] 全平台功能模块定义 + 默认值
 │

@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"toy-platform/core/db"
-	"toy-platform/core/idgen"
+	"tiny-lowcode-platform/core/db"
+	"tiny-lowcode-platform/core/idgen"
 
 	_ "modernc.org/sqlite"
 )
@@ -19,6 +19,7 @@ func New(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
+	database.Exec("PRAGMA foreign_keys = ON")
 
 	s := &Store{db: database}
 	if err := s.migrate(); err != nil {
@@ -282,6 +283,9 @@ func (s *Store) ListScripts(tenantID string) ([]db.ScriptSummary, error) {
 		}
 		scripts = append(scripts, sc)
 	}
+	if scripts == nil {
+		scripts = []db.ScriptSummary{}
+	}
 	return scripts, rows.Err()
 }
 
@@ -298,6 +302,9 @@ func (s *Store) ListAllScripts() ([]db.ScriptSummary, error) {
 			return nil, err
 		}
 		scripts = append(scripts, sc)
+	}
+	if scripts == nil {
+		scripts = []db.ScriptSummary{}
 	}
 	return scripts, rows.Err()
 }
@@ -377,6 +384,9 @@ func (s *Store) ListBreakpoints(scriptID string) ([]db.Breakpoint, error) {
 		}
 		bp.ScriptID = sid
 		bps = append(bps, bp)
+	}
+	if bps == nil {
+		bps = []db.Breakpoint{}
 	}
 	return bps, rows.Err()
 }

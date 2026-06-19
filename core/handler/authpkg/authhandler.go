@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"toy-platform/core/auth"
-	"toy-platform/core/db"
+	"tiny-lowcode-platform/core/auth"
+	"tiny-lowcode-platform/core/db"
 	"github.com/google/uuid"
 )
 

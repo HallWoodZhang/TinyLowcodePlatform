@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"toy-platform/core/auth"
-	"toy-platform/core/db"
+	"tiny-lowcode-platform/core/auth"
+	"tiny-lowcode-platform/core/db"
 )
 
 type authMockStore struct {
@@ -218,5 +218,81 @@ func TestBetamap(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "script_editor") {
 		t.Errorf("body = %s", w.Body.String())
+	}
+}
+
+func TestRefreshToken(t *testing.T) {
+	store := &authMockStore{
+		getUserFn: func(id string) (*db.User, error) {
+			return &db.User{ID: id, TenantID: "001a1", Username: "admin", Role: "admin"}, nil
+		},
+		getTenantFn: func(id string) (*db.Tenant, error) {
+			return &db.Tenant{ID: id, Name: "admin"}, nil
+		},
+	}
+	h := newAuthHandler(store)
+	req := httptest.NewRequest("POST", "/api/auth/refresh", nil)
+	ctx := auth.WithUserContext(req.Context(), "001b1", "001a1", "admin", "admin")
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	h.Refresh(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	var resp loginResp
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Token == "" {
+		t.Error("refresh should return new token")
+	}
+	if resp.User.Username != "admin" {
+		t.Errorf("user = %s", resp.User.Username)
+	}
+}
+
+func TestRefreshTokenNoUser(t *testing.T) {
+	store := &authMockStore{
+		getUserFn: func(id string) (*db.User, error) {
+			return nil, fmt.Errorf("not found")
+		},
+	}
+	h := newAuthHandler(store)
+	req := httptest.NewRequest("POST", "/api/auth/refresh", nil)
+	ctx := auth.WithUserContext(req.Context(), "001b1", "001a1", "admin", "admin")
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	h.Refresh(w, req)
+
+	if w.Code != 401 {
+		t.Errorf("status = %d, want 401", w.Code)
+	}
+}
+
+func TestBetamapNoAuth(t *testing.T) {
+	h := newAuthHandler(&authMockStore{})
+	req := httptest.NewRequest("GET", "/api/auth/betamap", nil)
+	w := httptest.NewRecorder()
+	h.Betamap(w, req)
+
+	if w.Code != 401 {
+		t.Errorf("status = %d, want 401", w.Code)
+	}
+}
+
+func TestBetamapTenantNotFound(t *testing.T) {
+	store := &authMockStore{
+		getTenantFn: func(id string) (*db.Tenant, error) {
+			return nil, fmt.Errorf("not found")
+		},
+	}
+	h := newAuthHandler(store)
+	req := httptest.NewRequest("GET", "/api/auth/betamap", nil)
+	ctx := auth.WithUserContext(req.Context(), "u1", "bad", "admin", "user")
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	h.Betamap(w, req)
+
+	if w.Code != 404 {
+		t.Errorf("status = %d, want 404", w.Code)
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"toy-platform/core/sqlstore"
+	"tiny-lowcode-platform/core/sqlstore"
 )
 
 type SqlHandler struct {

@@ -9,13 +9,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"toy-platform/core/auth"
-	"toy-platform/core/config"
-	"toy-platform/core/db/sqlite"
-	"toy-platform/core/handler"
-	"toy-platform/core/logger"
-	"toy-platform/core/runtime"
-	"toy-platform/core/validator"
+	"tiny-lowcode-platform/core/auth"
+	"tiny-lowcode-platform/core/config"
+	"tiny-lowcode-platform/core/db/sqlite"
+	"tiny-lowcode-platform/core/handler"
+	"tiny-lowcode-platform/core/logger"
+	"tiny-lowcode-platform/core/runtime"
+	"tiny-lowcode-platform/core/validator"
 )
 
 //go:embed static/*

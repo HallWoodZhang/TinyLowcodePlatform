@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"toy-platform/core/auth"
-	"toy-platform/core/config"
-	"toy-platform/core/db/sqlite"
-	"toy-platform/core/handler/authpkg"
-	"toy-platform/core/logger"
+	"tiny-lowcode-platform/core/auth"
+	"tiny-lowcode-platform/core/config"
+	"tiny-lowcode-platform/core/db/sqlite"
+	"tiny-lowcode-platform/core/handler/authpkg"
+	"tiny-lowcode-platform/core/logger"
 )
 
 //go:embed static/*

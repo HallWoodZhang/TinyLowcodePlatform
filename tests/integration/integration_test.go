@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"toy-platform/core/auth"
-	"toy-platform/core/db/sqlite"
-	"toy-platform/core/handler/adminpkg"
-	"toy-platform/core/handler/authpkg"
+	"tiny-lowcode-platform/core/auth"
+	"tiny-lowcode-platform/core/db/sqlite"
+	"tiny-lowcode-platform/core/handler/adminpkg"
+	"tiny-lowcode-platform/core/handler/authpkg"
 )
 
 // testEnv holds all test dependencies.

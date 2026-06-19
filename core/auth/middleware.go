@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"toy-platform/core/db"
+	"tiny-lowcode-platform/core/db"
 )
 
 func AuthMiddleware(secret []byte) func(http.Handler) http.Handler {

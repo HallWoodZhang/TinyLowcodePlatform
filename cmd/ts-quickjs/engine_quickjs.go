@@ -3,7 +3,7 @@
 package main
 
 import (
-	"toy-platform/core/runtime"
+	"tiny-lowcode-platform/core/runtime"
 )
 
 func newEngine(engineType string) runtime.Runner {

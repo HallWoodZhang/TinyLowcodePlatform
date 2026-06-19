@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"toy-platform/core/auth"
-	"toy-platform/core/db"
-	"toy-platform/core/runtime"
+	"tiny-lowcode-platform/core/auth"
+	"tiny-lowcode-platform/core/db"
+	"tiny-lowcode-platform/core/runtime"
 )
 
 type mockStore struct {

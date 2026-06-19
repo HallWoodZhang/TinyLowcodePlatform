@@ -1,4 +1,4 @@
-# Toy Platform v2.0.0 "Gateway"
+# Tiny Lowcode Platform v2.0.0 "Gateway"
 
 基于 QuickJS 的轻量级 TypeScript 脚本管理平台，支持多租户、认证鉴权、功能开关。
 
@@ -15,7 +15,7 @@
 ## 目录结构
 
 ```
-toy-platform/
+tiny-lowcode-platform/
 ├── betamap.def.json              # 全平台功能模块定义
 ├── cmd/
 │   ├── auth-server/              # 认证服务

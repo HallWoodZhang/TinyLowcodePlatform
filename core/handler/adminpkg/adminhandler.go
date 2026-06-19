@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"toy-platform/core/auth"
-	"toy-platform/core/db"
+	"tiny-lowcode-platform/core/auth"
+	"tiny-lowcode-platform/core/db"
 )
 
 type AdminHandler struct {

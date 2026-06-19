@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"toy-platform/core/auth"
-	"toy-platform/core/db"
-	"toy-platform/core/runtime"
+	"tiny-lowcode-platform/core/auth"
+	"tiny-lowcode-platform/core/db"
+	"tiny-lowcode-platform/core/runtime"
 )
 
 type Handler struct {

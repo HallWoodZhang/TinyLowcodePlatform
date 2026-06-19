@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"toy-platform/core/db"
+	"tiny-lowcode-platform/core/db"
 )
 
 func TestAuthMiddlewareHeader(t *testing.T) {

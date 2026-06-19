@@ -1,4 +1,4 @@
-module toy-platform
+module tiny-lowcode-platform
 
 go 1.25.0
 

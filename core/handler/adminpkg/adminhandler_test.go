@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"toy-platform/core/auth"
-	"toy-platform/core/db"
+	"tiny-lowcode-platform/core/auth"
+	"tiny-lowcode-platform/core/db"
 )
 
 type adminMockStore struct {
@@ -201,5 +201,98 @@ func TestUpdateTenantBetamap(t *testing.T) {
 	h.UpdateTenantBetamap(w, req)
 	if w.Code != 200 {
 		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateTenantDuplicate(t *testing.T) {
+	s := &adminMockStore{
+		createTenantFn: func(name, label, betamap string) (*db.Tenant, error) {
+			return nil, fmt.Errorf("UNIQUE constraint failed: tenants.name")
+		},
+	}
+	h := &AdminHandler{Store: s}
+	body := `{"name":"acme","label":"ACME"}`
+	req := httptest.NewRequest("POST", "/api/admin/tenants", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.CreateTenant(w, req)
+	if w.Code != 500 {
+		t.Errorf("status = %d, want 500", w.Code)
+	}
+}
+
+func TestCreateUserDuplicate(t *testing.T) {
+	s := &adminMockStore{
+		createUserFn: func(tenantID, username, passwordHash, role string) (*db.User, error) {
+			return nil, fmt.Errorf("UNIQUE constraint failed")
+		},
+	}
+	h := &AdminHandler{Store: s}
+	body := `{"username":"dev1","password":"pass1","role":"user"}`
+	req := httptest.NewRequest("POST", "/api/admin/tenants/001a1/users", strings.NewReader(body))
+	req.SetPathValue("id", "001a1")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.CreateUser(w, req)
+	if w.Code != 500 {
+		t.Errorf("status = %d, want 500", w.Code)
+	}
+}
+
+func TestDeleteTenant(t *testing.T) {
+	s := &adminMockStore{
+		deleteTenantFn: func(id string) error { return nil },
+	}
+	h := &AdminHandler{Store: s}
+	req := httptest.NewRequest("DELETE", "/api/admin/tenants/001a1", nil)
+	req.SetPathValue("id", "001a1")
+	w := httptest.NewRecorder()
+	h.DeleteTenant(w, req)
+	if w.Code != 204 {
+		t.Errorf("status = %d, want 204", w.Code)
+	}
+}
+
+func TestDeleteUser(t *testing.T) {
+	s := &adminMockStore{
+		deleteUserFn: func(id string) error { return nil },
+	}
+	h := &AdminHandler{Store: s}
+	req := httptest.NewRequest("DELETE", "/api/admin/tenants/001a1/users/001b1", nil)
+	req.SetPathValue("id", "001a1")
+	req.SetPathValue("uid", "001b1")
+	w := httptest.NewRecorder()
+	h.DeleteUser(w, req)
+	if w.Code != 204 {
+		t.Errorf("status = %d, want 204", w.Code)
+	}
+}
+
+func TestUpdatePasswordEmpty(t *testing.T) {
+	h := &AdminHandler{Store: &adminMockStore{}}
+	body := `{"password":""}`
+	req := httptest.NewRequest("PUT", "/api/admin/users/001b1/password", strings.NewReader(body))
+	req.SetPathValue("uid", "001b1")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.UpdateUserPassword(w, req)
+	if w.Code != 400 {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestGetTenantBetamapNotFound(t *testing.T) {
+	s := &adminMockStore{
+		getTenantFn: func(id string) (*db.Tenant, error) {
+			return nil, fmt.Errorf("not found")
+		},
+	}
+	h := &AdminHandler{Store: s}
+	req := httptest.NewRequest("GET", "/api/admin/tenants/bad/betamap", nil)
+	req.SetPathValue("id", "bad")
+	w := httptest.NewRecorder()
+	h.GetTenantBetamap(w, req)
+	if w.Code != 404 {
+		t.Errorf("status = %d, want 404", w.Code)
 	}
 }

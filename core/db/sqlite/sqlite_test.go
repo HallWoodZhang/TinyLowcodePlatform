@@ -3,7 +3,7 @@ package sqlite
 import (
 	"testing"
 
-	"toy-platform/core/db"
+	"tiny-lowcode-platform/core/db"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -220,5 +220,80 @@ func TestInterfaceCompliance(t *testing.T) {
 	}
 	if _, ok := s.(db.BreakpointStore); !ok {
 		t.Error("Store does not implement BreakpointStore")
+	}
+}
+
+func TestCascadeDeleteScriptRemovesBreakpoints(t *testing.T) {
+	s := newTestStore(t)
+	admin, _ := s.GetTenantByName("admin")
+	sc, _ := s.CreateScript(admin.ID, "cascade_test", "CT", "ts", "1")
+	s.SetBreakpoint(sc.ID, 5, true)
+	s.SetBreakpoint(sc.ID, 10, true)
+
+	bps, _ := s.ListBreakpoints(sc.ID)
+	if len(bps) != 2 {
+		t.Fatalf("expected 2 breakpoints, got %d", len(bps))
+	}
+
+	s.DeleteScript(sc.ID)
+
+	bps, _ = s.ListBreakpoints(sc.ID)
+	if len(bps) != 0 {
+		t.Errorf("expected 0 breakpoints after cascade, got %d", len(bps))
+	}
+}
+
+func TestGetScriptNotFound(t *testing.T) {
+	s := newTestStore(t)
+	_, err := s.GetScript("001c0000000000000000bad")
+	if err == nil {
+		t.Error("expected error for nonexistent script")
+	}
+}
+
+func TestGetTenantNotFound(t *testing.T) {
+	s := newTestStore(t)
+	_, err := s.GetTenant("001a0000000000000000bad")
+	if err == nil {
+		t.Error("expected error for nonexistent tenant")
+	}
+}
+
+func TestCreateDuplicateScriptName(t *testing.T) {
+	s := newTestStore(t)
+	admin, _ := s.GetTenantByName("admin")
+	_, err := s.CreateScript(admin.ID, "dup_test", "D", "ts", "1")
+	if err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+	_, err = s.CreateScript(admin.ID, "dup_test", "D2", "ts", "2")
+	if err == nil {
+		t.Error("expected error for duplicate script name in same tenant")
+	}
+}
+
+func TestListScriptsReturnsEmptySlice(t *testing.T) {
+	s := newTestStore(t)
+	// create a tenant with no scripts
+	acme, _ := s.CreateTenant("empty_tenant", "Empty", "{}")
+	scripts, err := s.ListScripts(acme.ID)
+	if err != nil {
+		t.Fatalf("ListScripts: %v", err)
+	}
+	if scripts == nil {
+		t.Error("expected empty slice, got nil")
+	}
+}
+
+func TestListBreakpointsReturnsEmptySlice(t *testing.T) {
+	s := newTestStore(t)
+	admin, _ := s.GetTenantByName("admin")
+	sc, _ := s.CreateScript(admin.ID, "no_bp", "NB", "ts", "1")
+	bps, err := s.ListBreakpoints(sc.ID)
+	if err != nil {
+		t.Fatalf("ListBreakpoints: %v", err)
+	}
+	if bps == nil {
+		t.Error("expected empty slice, got nil")
 	}
 }

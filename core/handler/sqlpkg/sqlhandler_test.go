@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"toy-platform/core/sqlstore"
+	"tiny-lowcode-platform/core/sqlstore"
 )
 
 type mockSqlStore struct {
