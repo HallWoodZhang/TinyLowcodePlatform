@@ -82,7 +82,8 @@ func main() {
 	fileServer := http.FileServer(http.FS(staticFS))
 	mux.Handle("GET /sql-runner/ui/", http.StripPrefix("/sql-runner/ui", fileServer))
 
-	authMW := auth.AuthMiddleware(secret)
+	blacklist := auth.NewBlacklist(cfg.RedisAddr, "", 0)
+	authMW := auth.AuthMiddleware(secret, blacklist)
 	adminMW := auth.AdminMiddleware()
 	bpMW := auth.BetamapMiddleware(store, "sql_runner")
 

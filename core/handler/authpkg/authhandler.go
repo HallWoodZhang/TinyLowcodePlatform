@@ -14,6 +14,7 @@ type AuthHandler struct {
 	Store       db.Store
 	TokenSecret []byte
 	TokenExpire time.Duration
+	Blacklist   auth.TokenBlacklist
 }
 
 type loginReq struct {
@@ -86,6 +87,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	// Add token to blacklist if Redis is configured
+	jti := auth.JTI(r.Context())
+	if jti != "" && h.Blacklist != nil {
+		h.Blacklist.Add(jti, h.TokenExpire)
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
 		Value:    "",

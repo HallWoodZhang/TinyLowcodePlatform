@@ -9,7 +9,10 @@ import (
 	"tiny-lowcode-platform/core/db"
 )
 
-func AuthMiddleware(secret []byte) func(http.Handler) http.Handler {
+func AuthMiddleware(secret []byte, blacklist TokenBlacklist) func(http.Handler) http.Handler {
+	if blacklist == nil {
+		blacklist = &nopBlacklist{}
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := extractToken(r)
@@ -24,11 +27,22 @@ func AuthMiddleware(secret []byte) func(http.Handler) http.Handler {
 				return
 			}
 
+			blocked, err := blacklist.IsBlocked(claims.JTI)
+			if err != nil {
+				writeAuthError(w, "auth service error")
+				return
+			}
+			if blocked {
+				writeAuthError(w, "token revoked")
+				return
+			}
+
 			ctx := r.Context()
 			ctx = context.WithValue(ctx, CtxUserID, claims.Sub)
 			ctx = context.WithValue(ctx, CtxTenantID, claims.TID)
 			ctx = context.WithValue(ctx, CtxTenantName, claims.TN)
 			ctx = context.WithValue(ctx, CtxRole, claims.Role)
+			ctx = context.WithValue(ctx, contextKey("jti"), claims.JTI)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

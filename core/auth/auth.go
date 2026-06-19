@@ -122,6 +122,11 @@ func TenantName(ctx context.Context) string {
 	return v
 }
 
+func JTI(ctx context.Context) string {
+	v, _ := ctx.Value(contextKey("jti")).(string)
+	return v
+}
+
 func WithUserContext(ctx context.Context, userID, tenantID, tenantName, role string) context.Context {
 	ctx = context.WithValue(ctx, CtxUserID, userID)
 	ctx = context.WithValue(ctx, CtxTenantID, tenantID)

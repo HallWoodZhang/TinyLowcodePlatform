@@ -88,7 +88,8 @@ func main() {
 	})
 
 	// protected
-	authMW := auth.AuthMiddleware(secret)
+	blacklist := auth.NewBlacklist(cfg.RedisAddr, "", 0)
+	authMW := auth.AuthMiddleware(secret, blacklist)
 	mux.Handle("GET /api/bff/entries", authMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tid := auth.TenantID(r.Context())
 		role := auth.Role(r.Context())

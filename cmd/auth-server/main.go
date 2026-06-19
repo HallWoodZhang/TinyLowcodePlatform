@@ -58,10 +58,13 @@ func main() {
 		expireHours = 1
 	}
 
+	blacklist := auth.NewBlacklist(cfg.RedisAddr, "", 0)
+
 	h := &authpkg.AuthHandler{
 		Store:       store,
 		TokenSecret: secret,
 		TokenExpire: time.Duration(expireHours) * time.Hour,
+		Blacklist:   blacklist,
 	}
 
 	mux := http.NewServeMux()
@@ -90,7 +93,7 @@ func main() {
 	mux.HandleFunc("POST /api/auth/logout", h.Logout)
 
 	// protected routes
-	authMW := auth.AuthMiddleware(secret)
+	authMW := auth.AuthMiddleware(secret, blacklist)
 	mux.Handle("GET /api/auth/me", authMW(http.HandlerFunc(h.Me)))
 	mux.Handle("GET /api/auth/betamap", authMW(http.HandlerFunc(h.Betamap)))
 	mux.Handle("POST /api/auth/refresh", authMW(http.HandlerFunc(h.Refresh)))

@@ -51,7 +51,8 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	authMW := auth.AuthMiddleware(secret)
+	blacklist := auth.NewBlacklist(cfg.RedisAddr, "", 0)
+	authMW := auth.AuthMiddleware(secret, blacklist)
 	adminMW := auth.AdminMiddleware()
 
 	// tenant CRUD

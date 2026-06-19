@@ -16,7 +16,7 @@ func TestAuthMiddlewareHeader(t *testing.T) {
 	secret := NewSecret()
 	token, _ := Sign(Claims{Sub: "u1", TID: "t1", TN: "admin", Role: "user", Exp: time.Now().Add(time.Hour).Unix(), JTI: "j1"}, secret)
 
-	handler := AuthMiddleware(secret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddleware(secret, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		json.NewEncoder(w).Encode(map[string]string{
 			"userID":   UserID(ctx),
@@ -44,7 +44,7 @@ func TestAuthMiddlewareCookie(t *testing.T) {
 	secret := NewSecret()
 	token, _ := Sign(Claims{Sub: "u2", TID: "t2", TN: "acme", Role: "tenant_admin", Exp: time.Now().Add(time.Hour).Unix(), JTI: "j2"}, secret)
 
-	handler := AuthMiddleware(secret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddleware(secret, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	}))
 
@@ -60,7 +60,7 @@ func TestAuthMiddlewareCookie(t *testing.T) {
 
 func TestAuthMiddlewareNoToken(t *testing.T) {
 	secret := NewSecret()
-	handler := AuthMiddleware(secret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddleware(secret, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	}))
 
@@ -77,7 +77,7 @@ func TestAuthMiddlewareExpiredToken(t *testing.T) {
 	secret := NewSecret()
 	token, _ := Sign(Claims{Sub: "u", TID: "t", TN: "x", Role: "user", Exp: time.Now().Add(-time.Hour).Unix(), JTI: "j"}, secret)
 
-	handler := AuthMiddleware(secret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddleware(secret, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	}))
 
@@ -93,7 +93,7 @@ func TestAuthMiddlewareExpiredToken(t *testing.T) {
 
 func TestAuthMiddlewareBadToken(t *testing.T) {
 	secret := NewSecret()
-	handler := AuthMiddleware(secret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthMiddleware(secret, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	}))
 

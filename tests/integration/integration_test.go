@@ -126,7 +126,7 @@ func TestFullAuthFlow(t *testing.T) {
 	}
 
 	// access /me (through auth middleware)
-	authMW := auth.AuthMiddleware(env.Secret)
+	authMW := auth.AuthMiddleware(env.Secret, nil)
 	meHandler := authMW(http.HandlerFunc(env.AuthHandler.Me))
 	meReq := httptest.NewRequest("GET", "/api/auth/me", nil)
 	meReq.Header.Set("Authorization", "Bearer "+token)
