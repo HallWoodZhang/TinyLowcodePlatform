@@ -48,23 +48,21 @@ async function init() {
     } catch(e) {}
 
     try {
-        const meRes = await fetch('/api/auth/me', { credentials: 'include' });
-        if (!meRes.ok) {
+        const res = await fetch('/api/bff/entries', { credentials: 'include' });
+        if (!res.ok) {
             window.location.href = 'http://127.0.0.1:9722/auth/ui/login.html';
             return;
         }
-        const me = await meRes.json();
-        document.getElementById('user-display').textContent = me.tenantName + '/' + me.username + ' (' + me.role + ')';
-    } catch(e) {
-        window.location.href = 'http://127.0.0.1:9722/auth/ui/login.html';
-        return;
-    }
+        const data = await res.json();
 
-    try {
-        const res = await fetch('/api/bff/entries', { credentials: 'include' });
-        const entries = await res.json();
+        // display user info (from entries response)
+        const u = data.user;
+        document.getElementById('user-display').textContent =
+            (u.tenantName || '') + '/' + u.username + ' (' + u.role + ')';
+
+        // render entry cards
         const grid = document.getElementById('entries');
-        entries.forEach(e => {
+        data.entries.forEach(e => {
             const card = document.createElement('a');
             card.className = 'card' + (e.enabled ? '' : ' disabled');
             card.href = e.enabled ? e.url : '#';
@@ -73,7 +71,7 @@ async function init() {
             grid.appendChild(card);
         });
     } catch(e) {
-        console.error(e);
+        window.location.href = 'http://127.0.0.1:9722/auth/ui/login.html';
     }
 }
 

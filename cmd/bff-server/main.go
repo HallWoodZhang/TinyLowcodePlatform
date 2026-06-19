@@ -93,6 +93,15 @@ func main() {
 	mux.Handle("GET /api/bff/entries", authMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tid := auth.TenantID(r.Context())
 		role := auth.Role(r.Context())
+		name := auth.TenantName(r.Context())
+		userID := auth.UserID(r.Context())
+
+		// get username
+		username := "unknown"
+		if u, err := store.GetUser(userID); err == nil {
+			username = u.Username
+		}
+
 		tenant, err := store.GetTenant(tid)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "tenant not found"})
@@ -109,7 +118,14 @@ func main() {
 			{"id": "admin", "label": "管理面板", "url": "http://127.0.0.1:9723/admin/ui/index.html", "enabled": isAdmin || betamap["admin_panel"] == true},
 		}
 
-		writeJSON(w, http.StatusOK, entries)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"user": map[string]string{
+				"username":   username,
+				"role":       role,
+				"tenantName": name,
+			},
+			"entries": entries,
+		})
 	})))
 
 	var srv http.Handler = mux
