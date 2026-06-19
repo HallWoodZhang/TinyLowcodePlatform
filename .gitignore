@@ -1,25 +1,46 @@
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# build output
 cmd/ts-quickjs/bin/
 cmd/sql-runner/bin/
 cmd/auth-server/bin/
 cmd/admin-server/bin/
 cmd/bff-server/bin/
+
+# config (contains secrets)
 cmd/ts-quickjs/conf/config.json
 cmd/sql-runner/conf/config.json
 cmd/auth-server/conf/config.json
 cmd/admin-server/conf/config.json
 cmd/bff-server/conf/config.json
+
+# logs
 cmd/ts-quickjs/logs/
 cmd/sql-runner/logs/
 cmd/auth-server/logs/
 cmd/admin-server/logs/
 cmd/bff-server/logs/
-.vscode/
+
+# runtime
 scripts.db
+.jwt_secret
 coverage.out
 coverage.html
-STANDARDS.md
-.jwt_secret
-auth-server
-bff-server
+
+# frontend
 frontend/dist/
 frontend/node_modules/
+
+# misc
+STANDARDS.md
+auth-server
+bff-server
+sql-runner
+ts-quickjs
+admin-server
