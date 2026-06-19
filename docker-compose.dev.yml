@@ -3,9 +3,9 @@ services:
     image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: toy_platform
-      MYSQL_USER: toy
-      MYSQL_PASSWORD: toy123
+      MYSQL_DATABASE: tiny_lowcode_platform
+      MYSQL_USER: tiny
+      MYSQL_PASSWORD: tiny@123
     ports:
       - "3306:3306"
     volumes:

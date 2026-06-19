@@ -7,6 +7,7 @@ import (
 	"tiny-lowcode-platform/core/db"
 	"tiny-lowcode-platform/core/idgen"
 
+	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite"
 )
 
@@ -101,10 +102,15 @@ func (s *Store) seed() error {
 		return err
 	}
 
+	adminHash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash admin password: %w", err)
+	}
+
 	adminUserID := idgen.NewUserID()
 	_, err = s.db.Exec(
 		`INSERT OR IGNORE INTO users (id, tenant_id, username, password_hash, role) VALUES (?, ?, 'admin', ?, 'admin')`,
-		adminUserID, adminID, "$2a$10$placeholder_admin123_hash",
+		adminUserID, adminID, string(adminHash),
 	)
 	return err
 }
@@ -121,8 +127,12 @@ func (s *Store) CreateTenant(name, label, betamap string) (*db.Tenant, error) {
 		return nil, err
 	}
 	userID := idgen.NewUserID()
+	masterHash, err := bcrypt.GenerateFromPassword([]byte(name), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("hash master password: %w", err)
+	}
 	if _, err := s.db.Exec(`INSERT OR IGNORE INTO users (id, tenant_id, username, password_hash, role) VALUES (?, ?, ?, ?, 'tenant_admin')`,
-		userID, id, name, "$2a$10$placeholder_master_hash"); err != nil {
+		userID, id, name, string(masterHash)); err != nil {
 		return nil, fmt.Errorf("create master user: %w", err)
 	}
 	return s.GetTenant(id)
