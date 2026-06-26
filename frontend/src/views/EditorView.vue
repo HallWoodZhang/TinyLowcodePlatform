@@ -220,21 +220,26 @@ function initEditor(code) {
         { key: 'Ctrl-Enter', run: () => { run(); return true } },
         { key: 'Cmd-Enter', run: () => { run(); return true } },
       ]),
+      EditorView.updateListener.of(update => {
+        if (!update.docChanged) return
+        if (active.value) active.value.tsCode = update.state.doc.toString()
+      }),
     ],
   })
 
   cmView.value = new EditorView({
     state, parent: editorHost.value,
-    dispatch: (tr) => {
-      cmView.value.update([tr])
-      if (tr.isUserEvent('select.gutter')) {
-        const pos = tr.startState.selection?.main?.head
-        if (pos != null) {
-          const line = tr.startState.doc.lineAt(pos).number
-          setTimeout(() => toggleBreakpoint(line), 0)
-        }
-      }
-    },
+  })
+
+  editorHost.value.addEventListener('click', (e) => {
+    if (!e.target.closest('.cm-breakpoint-gutter')) return
+    if (!active.value?.id) return
+    const view = cmView.value
+    if (!view) return
+    const pos = view.posAtCoords({ x: e.clientX, y: e.clientY })
+    if (pos == null) return
+    const line = view.state.doc.lineAt(pos).number
+    toggleBreakpoint(line)
   })
 }
 </script>
