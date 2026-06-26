@@ -224,10 +224,11 @@ function initEditor(code) {
   }
   const bpGutter = gutter({
     class: 'cm-breakpoint-gutter',
-    markers: () => {
-      const m = []; const v = cmView.value
-      if (!v) return m
-      for (let i = 1; i <= v.state.doc.lines; i++) { if (breakpoints.has(i)) m.push(new bpMarker.range(i)) }
+    markers: (view) => {
+      const m = []
+      for (let i = 1; i <= view.state.doc.lines; i++) {
+        if (breakpoints.has(i)) m.push(new bpMarker.range(i))
+      }
       return m
     },
     initialSpacer: false,
@@ -236,7 +237,11 @@ function initEditor(code) {
   const state = EditorState.create({
     doc: code || '',
     extensions: [
-      lineNumbers(), bpGutter, javascript(), oneDark, history(),
+      lineNumbers(),
+      bpGutter,
+      javascript(),
+      oneDark,
+      history(),
       keymap.of([...defaultKeymap, indentWithTab,
         { key: 'Mod-s', run: () => { handleSave(); return true } },
         { key: 'Mod-Enter', run: () => { handleRun(); return true } },
@@ -246,7 +251,6 @@ function initEditor(code) {
 
   cmView.value = new EditorView({ state, parent: editorHost.value })
 
-  // gutter click
   cmView.value.dom.addEventListener('click', (e) => {
     if (!e.target.closest('.cm-breakpoint-gutter')) return
     if (!active.value?.id) return
