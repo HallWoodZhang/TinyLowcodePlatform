@@ -16,40 +16,35 @@
       </ul>
     </aside>
     <main class="editor-main">
-      <!-- toolbar -->
       <div class="editor-toolbar" v-if="active">
         <input v-model="name" class="name" placeholder="name (unique)" />
         <input v-model="label" class="label" placeholder="display name" />
         <input v-model="type" class="type-field" placeholder="type" />
         <div class="spacer"></div>
         <button class="btn btn-warning btn-sm" @click="debug">● Debug</button>
-        <button class="btn btn-success btn-sm" @click="save">Save</button>
-        <button class="btn btn-info btn-sm" @click="run">▸ Run</button>
+        <button class="btn btn-success btn-sm" @click="handleSave">Save</button>
+        <button class="btn btn-info btn-sm" @click="handleRun">▸ Run</button>
       </div>
 
-      <!-- editor area -->
-      <div class="cm-wrap" ref="editorHost" v-show="active"></div>
+      <div v-if="active" class="cm-wrap" ref="editorHost"></div>
 
-      <!-- welcome state -->
-      <div class="welcome-state" v-if="!active">
+      <div v-if="!active" class="welcome-state">
         <div class="welcome-icon">⚡</div>
         <h2>Tiny Lowcode Editor</h2>
-        <p>Select a script from the sidebar to start editing, or create a new one.</p>
+        <p>Select a script from the sidebar or create a new one.</p>
         <div class="welcome-shortcuts">
           <div class="shortcut"><kbd>⌘/Ctrl</kbd> + <kbd>S</kbd> Save</div>
           <div class="shortcut"><kbd>⌘/Ctrl</kbd> + <kbd>Enter</kbd> Run</div>
-          <div class="shortcut">Click line number → Toggle breakpoint</div>
         </div>
       </div>
 
-      <!-- output -->
       <div class="editor-output">
         <div class="output-tabs">
           <span :class="{ active: outTab==='output' }" @click="outTab='output'">Output</span>
           <span :class="{ active: outTab==='debug' }" @click="outTab='debug'">Debug</span>
           <span style="margin-left:auto;color:var(--text-muted)">{{ rowCount }}</span>
         </div>
-        <div v-if="outTab==='output'" class="output-content" :class="{ error: hasError }" v-text="output || 'Run a script to see output'"></div>
+        <div v-if="outTab==='output'" class="output-content" :class="{ error: hasError }" v-text="output"></div>
         <div v-else class="output-content" v-html="debugHtml"></div>
       </div>
     </main>
@@ -57,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, shallowRef, watch } from 'vue'
+import { ref, onMounted, nextTick, shallowRef } from 'vue'
 import api from '../utils/api'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers, gutter, GutterMarker } from '@codemirror/view'
@@ -82,7 +77,12 @@ let breakpoints = new Set()
 onMounted(loadScripts)
 
 async function loadScripts() {
-  try { const res = await api.get('/api/scripts'); scripts.value = res.data } catch {}
+  try {
+    const res = await api.get('/api/scripts')
+    scripts.value = Array.isArray(res.data) ? res.data : []
+  } catch (e) {
+    console.error('loadScripts failed:', e)
+  }
 }
 
 function newScript() {
@@ -94,39 +94,56 @@ function newScript() {
 async function selectScript(s) {
   try {
     const res = await api.get(`/api/scripts/${s.id}`)
-    active.value = res.data
-    name.value = res.data.name; label.value = res.data.label; type.value = res.data.type
+    const data = res.data
+    active.value = data
+    name.value = data.name || ''
+    label.value = data.label || ''
+    type.value = data.type || ''
     await nextTick()
-    initEditor(res.data.tsCode || '')
+    initEditor(data.tsCode || '')
     loadBreakpoints()
-  } catch {}
+  } catch (e) {
+    console.error('selectScript failed:', e)
+    alert('Failed to load script: ' + (e.response?.data?.error || e.message))
+  }
 }
 
 async function delScript(s) {
   if (!confirm('Delete script?')) return
-  await api.delete(`/api/scripts/${s.id}`)
-  if (active.value?.id === s.id) { active.value = null; cmView.value?.destroy(); cmView.value = null }
-  loadScripts()
+  try {
+    await api.delete(`/api/scripts/${s.id}`)
+    if (active.value?.id === s.id) { active.value = null; cmView.value?.destroy(); cmView.value = null }
+    loadScripts()
+  } catch (e) {
+    console.error('deleteScript failed:', e)
+  }
 }
 
-async function save() {
+async function handleSave() {
   if (!active.value) return
   const s = active.value
-  s.name = name.value; s.label = label.value; s.type = type.value
-  s.tsCode = cmView.value?.state.doc.toString() || ''
+  s.name = name.value
+  s.label = label.value
+  s.type = type.value
+  if (cmView.value) s.tsCode = cmView.value.state.doc.toString()
   if (!s.name) return alert('Name required')
   if (!s.label) return alert('Label required')
+
+  const payload = { name: s.name, label: s.label, type: s.type, tsCode: s.tsCode || '' }
   try {
     const res = s.id
-      ? await api.put(`/api/scripts/${s.id}`, { name: s.name, label: s.label, type: s.type, tsCode: s.tsCode })
-      : await api.post('/api/scripts', { name: s.name, label: s.label, type: s.type, tsCode: s.tsCode })
+      ? await api.put(`/api/scripts/${s.id}`, payload)
+      : await api.post('/api/scripts', payload)
     active.value.id = res.data.id
     loadScripts()
-  } catch {}
+  } catch (e) {
+    console.error('save failed:', e)
+    alert('Save failed: ' + (e.response?.data?.error || e.message))
+  }
 }
 
-async function run() {
-  await save()
+async function handleRun() {
+  await handleSave()
   if (!active.value?.id) return
   outTab.value = 'output'
   output.value = 'Running...'; hasError.value = false
@@ -134,46 +151,50 @@ async function run() {
     const res = await api.post(`/api/scripts/${active.value.id}/run`)
     output.value = res.data.error || res.data.output || '(no output)'
     hasError.value = !!res.data.error
-  } catch { output.value = 'Error'; hasError.value = true }
+  } catch (e) {
+    output.value = 'Error: ' + (e.response?.data?.error || e.message)
+    hasError.value = true
+  }
 }
 
 async function debug() {
-  await save()
+  await handleSave()
   if (!active.value?.id) return
   output.value = 'Debugging...'; rowCount.value = ''
   try {
     const res = await api.post(`/api/scripts/${active.value.id}/debug`, { skip: 0 })
     handleDebugResult(res.data)
-  } catch { output.value = 'Error'; hasError.value = true }
+  } catch (e) {
+    output.value = 'Error: ' + (e.response?.data?.error || e.message)
+    hasError.value = true
+  }
 }
 
 function handleDebugResult(data) {
   if (data.error) { output.value = data.error; hasError.value = true; return }
-  output.value = data.output || '(no output)'
-  hasError.value = false
+  output.value = data.output || '(no output)'; hasError.value = false
   if (data.breakpoints?.length) {
     rowCount.value = 'Hit #' + (data.hitCount || 1)
     let html = ''
     data.breakpoints.forEach(bp => {
-      html += `<div style="margin-bottom:14px"><div style="color:#fbbf24;font-weight:600;font-size:13px">● Line ${bp.line}</div>`
+      html += '<div style="margin-bottom:14px"><div style="color:#fbbf24;font-weight:600">● Line ' + bp.line + '</div>'
       if (bp.name) {
-        html += `<div style="color:#94a3b8;font-size:11px;margin:4px 0">Stack:</div>`
+        html += '<div style="color:#94a3b8;font-size:11px;margin:4px 0">Stack:</div>'
         bp.name.replace(/\\n/g, '\n').split('\n').filter(s => s.trim()).forEach(s => {
-          html += `<div style="color:#64748b;font-size:11px">${esc(s.trim())}</div>`
+          html += '<div style="color:#64748b;font-size:11px">' + esc(s.trim()) + '</div>'
         })
       }
       if (bp.vars && Object.keys(bp.vars).length) {
-        html += `<div style="color:#94a3b8;font-size:11px;margin:4px 0">Variables:</div><table style="width:100%;font-size:11px">`
+        html += '<div style="color:#94a3b8;font-size:11px;margin:4px 0">Variables:</div><table style="width:100%;font-size:11px">'
         Object.keys(bp.vars).sort().forEach(k => {
           let v = String(bp.vars[k]); if (v.length > 100) v = v.substring(0, 100) + '...'
-          html += `<tr><td style="color:#60a5fa;width:120px;padding:2px 4px">${esc(k)}</td><td style="padding:2px 4px">${esc(v)}</td></tr>`
+          html += '<tr><td style="color:#60a5fa;width:120px">' + esc(k) + '</td><td>' + esc(v) + '</td></tr>'
         })
         html += '</table>'
       }
       html += '</div>'
     })
-    debugHtml.value = html
-    outTab.value = 'debug'
+    debugHtml.value = html; outTab.value = 'debug'
   }
 }
 
@@ -181,25 +202,22 @@ function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').
 
 async function loadBreakpoints() {
   if (!active.value?.id) return
-  try {
-    const res = await api.get(`/api/scripts/${active.value.id}/breakpoints`)
-    breakpoints = new Set(res.data.map(b => b.line))
-  } catch {}
+  try { const res = await api.get('/api/scripts/' + active.value.id + '/breakpoints'); breakpoints = new Set(res.data.map(b => b.line)) } catch {}
 }
 
 function toggleBreakpoint(line) {
   if (!active.value?.id) return
-  if (breakpoints.has(line)) {
-    api.delete(`/api/scripts/${active.value.id}/breakpoints/${line}`)
-    breakpoints.delete(line)
-  } else {
-    api.post(`/api/scripts/${active.value.id}/breakpoints`, { line, enabled: true })
-    breakpoints.add(line)
-  }
+  if (breakpoints.has(line)) { api.delete('/api/scripts/' + active.value.id + '/breakpoints/' + line); breakpoints.delete(line) }
+  else { api.post('/api/scripts/' + active.value.id + '/breakpoints', { line, enabled: true }); breakpoints.add(line) }
 }
 
 function initEditor(code) {
   if (cmView.value) { cmView.value.destroy(); cmView.value = null }
+
+  if (!editorHost.value) {
+    console.error('editorHost ref is null — DOM not ready')
+    return
+  }
 
   const bpMarker = new class extends GutterMarker {
     toDOM() { const e = document.createElement('span'); e.textContent = '●'; e.style.color = '#f87171'; e.style.fontSize = '10px'; return e }
@@ -207,10 +225,9 @@ function initEditor(code) {
   const bpGutter = gutter({
     class: 'cm-breakpoint-gutter',
     markers: () => {
-      const m = []
-      for (let i = 1; i <= (cmView.value?.state.doc.lines || 0); i++) {
-        if (breakpoints.has(i)) m.push(new bpMarker.range(i))
-      }
+      const m = []; const v = cmView.value
+      if (!v) return m
+      for (let i = 1; i <= v.state.doc.lines; i++) { if (breakpoints.has(i)) m.push(new bpMarker.range(i)) }
       return m
     },
     initialSpacer: false,
@@ -219,31 +236,24 @@ function initEditor(code) {
   const state = EditorState.create({
     doc: code || '',
     extensions: [
-      lineNumbers(),
-      bpGutter,
-      javascript(),
-      oneDark,
-      history(),
-      indentWithTab,
-      keymap.of([
-        ...defaultKeymap,
-        { key: 'Mod-s', run: () => { save(); return true } },
-        { key: 'Mod-Enter', run: () => { run(); return true } },
+      lineNumbers(), bpGutter, javascript(), oneDark, history(), indentWithTab,
+      keymap.of([...defaultKeymap,
+        { key: 'Mod-s', run: () => { handleSave(); return true } },
+        { key: 'Mod-Enter', run: () => { handleRun(); return true } },
       ]),
     ],
   })
 
   cmView.value = new EditorView({ state, parent: editorHost.value })
 
+  // gutter click
   cmView.value.dom.addEventListener('click', (e) => {
     if (!e.target.closest('.cm-breakpoint-gutter')) return
     if (!active.value?.id) return
-    const v = cmView.value
-    if (!v) return
+    const v = cmView.value; if (!v) return
     const pos = v.posAtCoords({ x: e.clientX, y: e.clientY })
     if (pos == null) return
-    const line = v.state.doc.lineAt(pos).number
-    toggleBreakpoint(line)
+    toggleBreakpoint(v.state.doc.lineAt(pos).number)
   })
 }
 </script>

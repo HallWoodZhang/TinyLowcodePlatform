@@ -233,8 +233,8 @@ select { cursor: pointer }
 .editor-toolbar input.type-field { width: 100px }
 .editor-toolbar .spacer { flex: 1 }
 .editor-toolbar .btn { font-size: .75rem }
-.cm-wrap { flex: 1; overflow: hidden }
-.cm-wrap .cm-editor { height: 100%; font-size: .85rem }
+.cm-wrap { flex: 1; overflow: hidden; min-height: 0 }
+.cm-wrap .cm-editor { height: 100%; font-size: .85rem; outline: none }
 .cm-wrap .cm-editor .cm-scroller { font-family: 'JetBrains Mono', 'Fira Code', monospace }
 .editor-output {
   height: 180px; min-height: 180px; border-top: 1px solid var(--border);
