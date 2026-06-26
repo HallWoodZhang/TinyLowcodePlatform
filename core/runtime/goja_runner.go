@@ -121,6 +121,11 @@ func (e *GojaEngine) executeDebug(jsCode string, skip int, timeoutMs int64) RunR
 
 	val, err := vm.RunString(jsCode)
 	if err != nil {
+		// Goja errors include stack trace in the error message
+		errStr := err.Error()
+		if exc := vm.Get("__exception__"); exc != nil {
+			errStr = exc.String()
+		}
 		if bpOutput.Len() > 0 {
 			runResult := RunResult{}
 			if output.Len() > 0 {
@@ -132,7 +137,7 @@ func (e *GojaEngine) executeDebug(jsCode string, skip int, timeoutMs int64) RunR
 		}
 		return RunResult{
 			Output: output.String(),
-			Error:  "Runtime error: " + err.Error(),
+			Error:  "Runtime error:\n" + errStr,
 		}
 	}
 

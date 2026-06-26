@@ -83,7 +83,7 @@ func (e *QuickJSEngine) execute(jsCode string) RunResult {
 	if err != nil {
 		return RunResult{
 			Output: output.String(),
-			Error:  "Runtime error: " + err.Error(),
+			Error:  "Runtime error:\n" + err.Error(),
 		}
 	}
 	defer result.Free()
