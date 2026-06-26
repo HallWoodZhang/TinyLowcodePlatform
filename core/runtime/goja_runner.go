@@ -13,11 +13,15 @@ import (
 type GojaEngine struct{}
 
 func (e *GojaEngine) Run(tsCode string, resolver ScriptResolver, timeoutMs int64) RunResult {
-	jsCode, _, err := buildJS(tsCode, resolver)
+	jsCode, mapper, err := buildJS(tsCode, resolver)
 	if err != nil {
 		return RunResult{Error: err.Error()}
 	}
-	return e.execute(jsCode, timeoutMs)
+	result := e.execute(jsCode, timeoutMs)
+	if result.Error != "" && mapper != nil {
+		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLine(result.Error, mapper)
+	}
+	return result
 }
 
 func (e *GojaEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLine, skip int, timeoutMs int64) RunResult {
@@ -39,6 +43,9 @@ func (e *GojaEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLine,
 		jsCode = instrumentCode(jsCode, jsLines, lineVars)
 	}
 	result := e.executeDebug(jsCode, skip, timeoutMs)
+	if result.Error != "" && mapper != nil {
+		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLine(result.Error, mapper)
+	}
 	for i := range result.Breakpoints {
 		if mapper != nil {
 			if _, _, sl, _, ok := mapper.Source(result.Breakpoints[i].Line, 0); ok {

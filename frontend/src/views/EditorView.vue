@@ -151,6 +151,11 @@ async function handleRun() {
     const res = await api.post(`/api/scripts/${active.value.id}/run`)
     output.value = res.data.error || res.data.output || '(no output)'
     hasError.value = !!res.data.error
+    // scroll to error TS line if available
+    if (res.data.errorTSLine && cmView.value) {
+      const v = cmView.value
+      v.dispatch({ effects: EditorView.scrollIntoView(v.state.doc.line(res.data.errorTSLine).from) })
+    }
   } catch (e) {
     output.value = 'Error: ' + (e.response?.data?.error || e.message)
     hasError.value = true

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	sm "github.com/go-sourcemap/sourcemap"
@@ -12,6 +13,7 @@ import (
 )
 
 var inlineSourcemapRE = regexp.MustCompile(`//# sourceMappingURL=data:application/json;base64,([^\s]+)`)
+var gojaErrLineRE = regexp.MustCompile(`<eval>:(\d+):(\d+)`)
 
 func buildJS(tsCode string, resolver ScriptResolver) (string, *sm.Consumer, error) {
 	buildResult := api.Build(api.BuildOptions{
@@ -141,4 +143,30 @@ func instrumentCode(jsCode string, jsLines []int, lineVars map[int][]string) str
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+func mapErrorLine(errMsg string, mapper *sm.Consumer) (string, int, int) {
+	if mapper == nil {
+		return errMsg, 0, 0
+	}
+
+	matches := gojaErrLineRE.FindStringSubmatch(errMsg)
+	if matches == nil {
+		lines := strings.SplitN(errMsg, "\n", 2)
+		if len(lines) <= 1 {
+			return errMsg, 0, 0
+		}
+		// Goja errors have "at <eval>:line:col" in the second line
+		matches = gojaErrLineRE.FindStringSubmatch(lines[1])
+		if matches == nil {
+			return errMsg, 0, 0
+		}
+	}
+
+	jsLine, _ := strconv.Atoi(matches[1])
+	_, _, tsLine, _, ok := mapper.Source(jsLine, 0)
+	if ok {
+		return fmt.Sprintf("%s\n  [TS line %d, JS line %d]", errMsg, tsLine, jsLine), jsLine, tsLine
+	}
+	return fmt.Sprintf("%s\n  [JS line %d]", errMsg, jsLine), jsLine, 0
 }

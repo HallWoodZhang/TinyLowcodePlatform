@@ -14,11 +14,16 @@ import (
 type QuickJSEngine struct{}
 
 func (e *QuickJSEngine) Run(tsCode string, resolver ScriptResolver, timeoutMs int64) RunResult {
-	jsCode, _, err := buildJS(tsCode, resolver)
+	jsCode, mapper, err := buildJS(tsCode, resolver)
 	if err != nil {
 		return RunResult{Error: err.Error()}
 	}
-	return e.execute(jsCode)
+	result := e.execute(jsCode)
+	// Map JS error line to TS if available
+	if result.Error != "" && mapper != nil {
+		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLine(result.Error, mapper)
+	}
+	return result
 }
 
 func (e *QuickJSEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLine, skip int, timeoutMs int64) RunResult {
@@ -31,6 +36,10 @@ func (e *QuickJSEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLi
 		jsCode = instrumentCode(jsCode, jsLines, nil)
 	}
 	result := e.execute(jsCode)
+	// Map error line
+	if result.Error != "" && mapper != nil {
+		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLine(result.Error, mapper)
+	}
 	for i := range result.Breakpoints {
 		if mapper != nil {
 			if _, _, sl, _, ok := mapper.Source(result.Breakpoints[i].Line, 0); ok {

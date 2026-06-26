@@ -7,6 +7,8 @@ import (
 type RunResult struct {
 	Output      string          `json:"output,omitempty"`
 	Error       string          `json:"error,omitempty"`
+	ErrorLine   int             `json:"errorLine,omitempty"`
+	ErrorTSLine int             `json:"errorTSLine,omitempty"`
 	Breakpoints []BreakpointHit `json:"breakpoints,omitempty"`
 	HitCount    int             `json:"hitCount,omitempty"`
 }
