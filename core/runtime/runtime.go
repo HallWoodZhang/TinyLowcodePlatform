@@ -21,7 +21,7 @@ func (e *QuickJSEngine) Run(tsCode string, resolver ScriptResolver, timeoutMs in
 	result := e.execute(jsCode)
 	// Map JS error line to TS if available
 	if result.Error != "" && mapper != nil {
-		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLineWithOffset(result.Error, mapper, -1)
+		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLineWithOffset(result.Error, mapper, -2)
 	}
 	return result
 }
@@ -38,7 +38,7 @@ func (e *QuickJSEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLi
 	result := e.execute(jsCode)
 	// Map error line
 	if result.Error != "" && mapper != nil {
-		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLineWithOffset(result.Error, mapper, -1)
+		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLineWithOffset(result.Error, mapper, -2)
 	}
 	for i := range result.Breakpoints {
 		if mapper != nil {
@@ -88,8 +88,9 @@ func (e *QuickJSEngine) execute(jsCode string) RunResult {
 		return ctx.Null()
 	}))
 
-	// Wrap in try-catch to capture Error.stack (QuickJS supports it)
-	wrappedCode := "try {\n" + jsCode + "\n} catch(__e) { console.log('__TRACE__:' + __e.toString() + '\\n' + (__e.stack || '')); }"
+	// Wrap code in try-catch; store error in __error_result global instead of console.log
+	// because console.log calls arg.String() which loses Error.stack
+	wrappedCode := "var __error_result = '';\ntry {\n" + jsCode + "\n} catch(__e) { __error_result = __e.toString() + '\\n' + (__e.stack || ''); }"
 
 	result, err := jsCtx.EvalFile(wrappedCode, qjs.EVAL_GLOBAL, "script.ts")
 	defer func() {
@@ -98,32 +99,30 @@ func (e *QuickJSEngine) execute(jsCode string) RunResult {
 		}
 	}()
 
-	outStr := output.String()
-
-	// Check for caught exception in console output
-	if idx := strings.Index(outStr, "__TRACE__:"); idx >= 0 {
-		trace := strings.TrimSpace(outStr[idx+len("__TRACE__:"):])
-		cleanOutput := strings.TrimSpace(outStr[:idx])
-		if cleanOutput == "" {
-			cleanOutput = "(no output before error)"
-		}
+	// Read caught error from global variable
+	errVal := jsCtx.Globals().Get("__error_result")
+	errStr := ""
+	if errVal.IsString() {
+		errStr = errVal.String()
+	}
+	if errStr != "" {
 		return RunResult{
-			Output: cleanOutput,
-			Error:  "Runtime error:\n" + trace,
+			Output: output.String(),
+			Error:  "Runtime error:\n" + errStr,
 		}
 	}
 
 	// If EvalFile itself returned an error (syntax error etc.)
 	if err != nil {
 		return RunResult{
-			Output: outStr,
+			Output: output.String(),
 			Error:  "Runtime error:\n" + err.Error(),
 		}
 	}
 
 	runResult := RunResult{}
 	if output.Len() > 0 {
-		runResult.Output = outStr
+		runResult.Output = output.String()
 	} else if result.IsUndefined() {
 		runResult.Output = "undefined"
 	} else {
