@@ -1,11 +1,19 @@
 <template>
-  <div style="padding-top: 20px;">
-    <div class="muted" style="text-align:center" v-if="loading">Loading...</div>
+  <div class="portal-page">
+    <div class="portal-hero">
+      <h2>Welcome, {{ auth.user?.username }}</h2>
+      <p>{{ auth.tenantName }} · {{ auth.user?.role === 'admin' ? 'Platform Admin' : auth.user?.role }}</p>
+    </div>
+    <div v-if="loading" class="loading-state"><div class="spinner"></div> Loading...</div>
     <div class="card-grid" v-else>
-      <a v-for="e in entries" :key="e.id" class="card" :class="{ disabled: !e.enabled }" :href="e.enabled ? e.url : '#'" @click.prevent="e.enabled && go(e.url)">
-        <div class="icon">{{ icon(e.id) }}</div>
-        <div class="label">{{ e.label }}</div>
-      </a>
+      <template v-for="e in entries" :key="e.id">
+        <div class="entry-card" :class="{ disabled: !e.enabled }" @click="e.enabled && go(e)">
+          <div class="card-icon">{{ icons[e.id] || '📦' }}</div>
+          <div class="card-label">{{ e.label }}</div>
+          <div class="card-badge" v-if="!e.enabled">Disabled</div>
+          <div class="card-badge" v-else-if="e.id==='admin'">Admin</div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -13,11 +21,14 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 import api from '../utils/api'
 
 const router = useRouter()
+const auth = useAuthStore()
 const entries = ref([])
 const loading = ref(true)
+const icons = { scripts: '📝', sql_runner: '🔍', admin: '⚙️' }
 
 onMounted(async () => {
   try {
@@ -26,15 +37,10 @@ onMounted(async () => {
   } catch {} finally { loading.value = false }
 })
 
-function icon(id) {
-  return { scripts: '\u{1F4DD}', sql_runner: '\u{1F50D}', admin: '\u{2699}\u{FE0F}' }[id] || '\u{1F4E6}'
-}
-
-function go(url) {
-  // map external URLs to Vue routes
-  if (url.includes('ts-quickjs')) router.push('/scripts')
-  else if (url.includes('sql-runner')) router.push('/sql')
-  else if (url.includes('admin-server')) router.push('/admin')
-  else window.open(url, '_blank')
+function go(e) {
+  if (e.url?.includes('ts-quickjs')) router.push('/scripts')
+  else if (e.url?.includes('sql-runner')) router.push('/sql')
+  else if (e.url?.includes('admin-server')) router.push('/admin')
+  else window.open(e.url, '_blank')
 }
 </script>

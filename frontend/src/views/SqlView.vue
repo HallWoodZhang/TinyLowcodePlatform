@@ -2,27 +2,25 @@
   <div class="sql-layout">
     <aside class="sql-sidebar">
       <div class="sidebar-hd">Tables</div>
-      <ul class="list">
+      <ul class="sql-sidebar-list">
         <li v-for="t in tables" :key="t" @click="selectTable(t)">{{ t }}</li>
       </ul>
     </aside>
     <main class="sql-main">
       <div class="sql-toolbar">
-        <span>SQL Query — Ctrl+Enter to run</span>
-        <div style="display:flex;gap:6px">
-          <button class="btn-blue" style="padding:4px 12px;font-size:11px" @click="runAll">Run</button>
-        </div>
+        <span>SQL Query · ⌘/Ctrl + Enter to run</span>
+        <button class="btn btn-info btn-sm" @click="runAll">▸ Run</button>
       </div>
-      <div class="sql-editor" ref="sqlHost"></div>
+      <div class="sql-editor-wrap" ref="sqlHost"></div>
       <div class="sql-result">
-        <div v-if="resultError" class="error-text">{{ resultError }}</div>
-        <table v-else-if="resultColumns.length">
-          <thead><tr><th v-for="c in resultColumns" :key="c">{{ c }}</th></tr></thead>
+        <div v-if="error" class="output-content error">{{ error }}</div>
+        <table v-else-if="columns.length">
+          <thead><tr><th v-for="c in columns" :key="c">{{ c }}</th></tr></thead>
           <tbody>
-            <tr v-for="(row,i) in resultRows" :key="i"><td v-for="(cell,j) in row" :key="j">{{ cell === null ? 'NULL' : cell }}</td></tr>
+            <tr v-for="(row,i) in rows" :key="i"><td v-for="(cell,j) in row" :key="j">{{ cell === null ? 'NULL' : cell }}</td></tr>
           </tbody>
         </table>
-        <div v-else class="muted">{{ resultMsg }}</div>
+        <div v-else class="empty-state">{{ status || 'Select a table or write SQL' }}</div>
       </div>
     </main>
   </div>
@@ -38,20 +36,22 @@ import { oneDark } from '@codemirror/theme-one-dark'
 import { defaultKeymap } from '@codemirror/commands'
 
 const tables = ref([])
-const resultColumns = ref([])
-const resultRows = ref([])
-const resultError = ref('')
-const resultMsg = ref('Select a table or write SQL')
+const columns = ref([])
+const rows = ref([])
+const error = ref('')
+const status = ref('')
 const sqlHost = ref(null)
 const sqlView = shallowRef(null)
 
 onMounted(async () => {
-  const res = await api.get('/api/sql/tables')
-  tables.value = res.data
-  nextTick(initSqlEditor)
+  try {
+    const res = await api.get('/api/sql/tables')
+    tables.value = res.data
+  } catch {}
+  nextTick(initEditor)
 })
 
-function initSqlEditor() {
+function initEditor() {
   const state = EditorState.create({
     doc: '',
     extensions: [
@@ -73,13 +73,12 @@ function selectTable(name) {
 async function runAll() {
   const sqlText = sqlView.value.state.doc.toString().trim()
   if (!sqlText) return
-  resultError.value = ''; resultColumns.value = []; resultRows.value = []; resultMsg.value = 'Running...'
+  error.value = ''; columns.value = []; rows.value = []; status.value = 'Running...'
   try {
     const res = await api.post('/api/sql/run', { sql: sqlText })
-    if (res.data.error) { resultError.value = res.data.error; return }
-    resultColumns.value = res.data.columns || []
-    resultRows.value = res.data.rows || []
-    resultMsg.value = `(${res.data.rowCount || 0} rows)`
-  } catch (e) { resultError.value = e.response?.data?.error || 'Error' }
+    if (res.data.error) { error.value = res.data.error; return }
+    columns.value = res.data.columns || []; rows.value = res.data.rows || []
+    status.value = `(${res.data.rowCount || 0} rows)`
+  } catch (e) { error.value = e.response?.data?.error || 'Query error' }
 }
 </script>

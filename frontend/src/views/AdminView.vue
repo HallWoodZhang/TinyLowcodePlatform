@@ -1,63 +1,62 @@
 <template>
   <div class="admin-layout">
-    <div v-if="error" class="error-text" style="margin-bottom:12px">{{ error }}</div>
-    <div v-if="!auth.isAdmin" class="error-text">Access denied: admin role required.</div>
+    <div v-if="error" class="toast" @click="error=''">{{ error }}</div>
+
+    <div v-if="!auth.isAdmin" class="empty-state">Access denied: admin role required.</div>
     <template v-else>
-      <h2>Tenants</h2>
+      <!-- tenants -->
+      <div class="section-title">Tenants</div>
       <div class="admin-row">
-        <input v-model="newTenantName" placeholder="Tenant name" />
-        <input v-model="newTenantLabel" placeholder="Display label" />
-        <button class="btn-primary" @click="createTenant">Create</button>
+        <input v-model="tName" placeholder="Tenant name" />
+        <input v-model="tLabel" placeholder="Display label" />
+        <button class="btn btn-primary btn-sm" @click="createTenant">Create Tenant</button>
       </div>
       <table class="admin-table">
-        <thead><tr><th>ID</th><th>Name</th><th>Label</th><th>Created</th><th></th></tr></thead>
+        <thead><tr><th>ID</th><th>Name</th><th>Label</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody>
           <tr v-for="t in tenants" :key="t.id">
-            <td class="muted">{{ t.id.substring(0,16) }}...</td>
+            <td class="mono">{{ t.id.slice(0,16) }}…</td>
             <td>{{ t.name }}</td>
             <td>{{ t.label }}</td>
-            <td class="muted">{{ t.createdAt?.substring(0,10) }}</td>
+            <td>{{ (t.createdAt||'').slice(0,10) }}</td>
             <td>
-              <button class="btn-green" style="padding:2px 8px;font-size:11px" @click="selectTenant(t)">Users</button>
-              <button class="btn-yellow" style="padding:2px 8px;font-size:11px;margin-left:4px" @click="editBetamap(t)">Betamap</button>
+              <button class="btn btn-ghost btn-xs" @click="showUsers(t)">Users</button>
+              <button class="btn btn-ghost btn-xs" @click="editBetamap(t)">Betamap</button>
             </td>
           </tr>
         </tbody>
       </table>
 
-      <div v-if="selectedTenant">
-        <h2>Users — {{ selectedTenant.name }}</h2>
+      <!-- users -->
+      <div v-if="selTenant">
+        <div class="section-title">Users — {{ selTenant.name }}</div>
         <div class="admin-row">
-          <input v-model="newUsername" placeholder="Username" />
-          <input v-model="newPassword" placeholder="Password" type="password" />
-          <select v-model="newRole">
-            <option value="user">user</option>
-            <option value="tenant_admin">tenant_admin</option>
-          </select>
-          <button class="btn-primary" @click="createUser">Create User</button>
+          <input v-model="uName" placeholder="Username" />
+          <input v-model="uPass" placeholder="Password" type="password" />
+          <select v-model="uRole"><option value="user">user</option><option value="tenant_admin">tenant_admin</option></select>
+          <button class="btn btn-primary btn-sm" @click="createUser">Add User</button>
         </div>
         <table class="admin-table">
-          <thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Created</th><th></th></tr></thead>
+          <thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Actions</th></tr></thead>
           <tbody>
-            <tr v-for="u in selectedUsers" :key="u.id">
-              <td class="muted">{{ u.id.substring(0,16) }}...</td>
+            <tr v-for="u in selUsers" :key="u.id">
+              <td class="mono">{{ u.id.slice(0,16) }}…</td>
               <td>{{ u.username }}</td>
-              <td>{{ u.role }}</td>
-              <td class="muted">{{ u.createdAt?.substring(0,10) }}</td>
-              <td>
-                <button class="btn-yellow" style="padding:2px 8px;font-size:11px" @click="resetPwd(u)">Reset Pwd</button>
-              </td>
+              <td><span class="card-badge">{{ u.role }}</span></td>
+              <td><button class="btn btn-warning btn-xs" @click="resetPwd(u)">Reset Pwd</button></td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div v-if="betamapTenant">
-        <h2>Betamap — {{ betamapTenant.name }}</h2>
-        <textarea v-model="betamapJson" style="width:100%;height:200px;font-family:monospace;font-size:12px"></textarea>
-        <br/><br/>
-        <button class="btn-primary" @click="saveBetamap">Save Betamap</button>
-        <button class="btn-blue" style="margin-left:8px" @click="closeBetamap">Cancel</button>
+      <!-- betamap editor -->
+      <div v-if="bpTenant" class="betamap-editor">
+        <div class="section-title">Betamap — {{ bpTenant.name }}</div>
+        <textarea v-model="bpJson"></textarea>
+        <div class="actions">
+          <button class="btn btn-primary btn-sm" @click="saveBetamap">Save</button>
+          <button class="btn btn-ghost btn-sm" @click="bpTenant=null">Cancel</button>
+        </div>
       </div>
     </template>
   </div>
@@ -70,66 +69,50 @@ import api from '../utils/api'
 
 const auth = useAuthStore()
 const tenants = ref([])
-const newTenantName = ref('')
-const newTenantLabel = ref('')
-const selectedTenant = ref(null)
-const selectedUsers = ref([])
-const newUsername = ref('')
-const newPassword = ref('')
-const newRole = ref('user')
-const betamapTenant = ref(null)
-const betamapJson = ref('')
+const tName = ref(''); const tLabel = ref('')
+const selTenant = ref(null); const selUsers = ref([])
+const uName = ref(''); const uPass = ref(''); const uRole = ref('user')
+const bpTenant = ref(null); const bpJson = ref('')
 const error = ref('')
 
-onMounted(loadTenants)
-
-async function loadTenants() {
-  const res = await api.get('/api/admin/tenants')
-  tenants.value = res.data
-}
+onMounted(async () => {
+  try { const r = await api.get('/api/admin/tenants'); tenants.value = r.data } catch {}
+})
 
 async function createTenant() {
-  if (!newTenantName.value) return
-  await api.post('/api/admin/tenants', { name: newTenantName.value, label: newTenantLabel.value })
-  newTenantName.value = ''; newTenantLabel.value = ''
-  loadTenants()
+  if (!tName.value) return
+  await api.post('/api/admin/tenants', { name: tName.value, label: tLabel.value })
+  tName.value = ''; tLabel.value = ''
+  const r = await api.get('/api/admin/tenants'); tenants.value = r.data
 }
 
-async function selectTenant(t) {
-  selectedTenant.value = t
-  const res = await api.get(`/api/admin/tenants/${t.id}/users`)
-  selectedUsers.value = res.data
+async function showUsers(t) {
+  selTenant.value = t; bpTenant.value = null
+  const r = await api.get(`/api/admin/tenants/${t.id}/users`); selUsers.value = r.data
 }
 
 async function createUser() {
-  if (!newUsername.value || !newPassword.value) return
-  await api.post(`/api/admin/tenants/${selectedTenant.value.id}/users`, {
-    username: newUsername.value, password: newPassword.value, role: newRole.value
-  })
-  newUsername.value = ''; newPassword.value = ''
-  selectTenant(selectedTenant.value)
+  if (!uName.value || !uPass.value) return
+  await api.post(`/api/admin/tenants/${selTenant.value.id}/users`, { username: uName.value, password: uPass.value, role: uRole.value })
+  uName.value = ''; uPass.value = ''
+  showUsers(selTenant.value)
 }
 
 async function resetPwd(u) {
-  const pwd = prompt('New password for ' + u.username)
-  if (!pwd) return
-  await api.put(`/api/admin/users/${u.id}/password`, { password: pwd })
+  const p = prompt('New password for ' + u.username)
+  if (!p) return
+  await api.put(`/api/admin/users/${u.id}/password`, { password: p })
 }
 
 async function editBetamap(t) {
-  const res = await api.get(`/api/admin/tenants/${t.id}/betamap`)
-  betamapTenant.value = t
-  betamapJson.value = typeof res.data === 'string' ? JSON.stringify(JSON.parse(res.data), null, 2) : JSON.stringify(res.data, null, 2)
+  const r = await api.get(`/api/admin/tenants/${t.id}/betamap`)
+  bpTenant.value = t; selTenant.value = null
+  bpJson.value = JSON.stringify(typeof r.data === 'string' ? JSON.parse(r.data) : r.data, null, 2)
 }
 
 async function saveBetamap() {
-  try {
-    JSON.parse(betamapJson.value)
-  } catch { error.value = 'Invalid JSON'; return }
-  await api.put(`/api/admin/tenants/${betamapTenant.value.id}/betamap`, JSON.parse(betamapJson.value))
-  betamapTenant.value = null
-  error.value = ''
+  try { JSON.parse(bpJson.value) } catch { error.value = 'Invalid JSON'; return }
+  await api.put(`/api/admin/tenants/${bpTenant.value.id}/betamap`, JSON.parse(bpJson.value))
+  bpTenant.value = null; error.value = ''
 }
-
-function closeBetamap() { betamapTenant.value = null; error.value = '' }
 </script>
