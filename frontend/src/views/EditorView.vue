@@ -236,8 +236,8 @@ function initEditor(code) {
   const state = EditorState.create({
     doc: code || '',
     extensions: [
-      lineNumbers(), bpGutter, javascript(), oneDark, history(), indentWithTab,
-      keymap.of([...defaultKeymap,
+      lineNumbers(), bpGutter, javascript(), oneDark, history(),
+      keymap.of([...defaultKeymap, indentWithTab,
         { key: 'Mod-s', run: () => { handleSave(); return true } },
         { key: 'Mod-Enter', run: () => { handleRun(); return true } },
       ]),
