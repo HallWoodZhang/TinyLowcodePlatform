@@ -38,9 +38,9 @@ onMounted(async () => {
 })
 
 function go(e) {
-  if (e.url?.includes('ts-quickjs')) router.push('/scripts')
-  else if (e.url?.includes('sql-runner')) router.push('/sql')
-  else if (e.url?.includes('admin-server')) router.push('/admin')
+  if (e.id === 'scripts') router.push('/scripts')
+  else if (e.id === 'sql_runner') router.push('/sql')
+  else if (e.id === 'admin') router.push('/admin')
   else window.open(e.url, '_blank')
 }
 </script>

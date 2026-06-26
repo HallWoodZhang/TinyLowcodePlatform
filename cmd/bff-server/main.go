@@ -113,9 +113,9 @@ func main() {
 
 		isAdmin := role == "admin"
 		entries := []map[string]any{
-			{"id": "scripts", "label": "查看脚本", "url": "http://127.0.0.1:9720/ts-quickjs/ui/index.html", "enabled": isAdmin || betamap["script_editor"] == true},
-			{"id": "sql_runner", "label": "SQL查询", "url": "http://127.0.0.1:9721/sql-runner/ui/index.html", "enabled": isAdmin || betamap["sql_runner"] == true},
-			{"id": "admin", "label": "管理面板", "url": "http://127.0.0.1:9723/admin/ui/index.html", "enabled": isAdmin || betamap["admin_panel"] == true},
+			{"id": "scripts", "label": "查看脚本", "url": "/scripts", "enabled": isAdmin || betamap["script_editor"] == true},
+			{"id": "sql_runner", "label": "SQL查询", "url": "/sql", "enabled": isAdmin || betamap["sql_runner"] == true},
+			{"id": "admin", "label": "管理面板", "url": "/admin", "enabled": isAdmin || betamap["admin_panel"] == true},
 		}
 
 		writeJSON(w, http.StatusOK, map[string]any{
