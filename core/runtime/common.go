@@ -146,6 +146,10 @@ func instrumentCode(jsCode string, jsLines []int, lineVars map[int][]string) str
 }
 
 func mapErrorLine(errMsg string, mapper *sm.Consumer) (string, int, int) {
+	return mapErrorLineWithOffset(errMsg, mapper, 0)
+}
+
+func mapErrorLineWithOffset(errMsg string, mapper *sm.Consumer, lineOffset int) (string, int, int) {
 	if mapper == nil {
 		return errMsg, 0, 0
 	}
@@ -156,14 +160,27 @@ func mapErrorLine(errMsg string, mapper *sm.Consumer) (string, int, int) {
 		if len(lines) <= 1 {
 			return errMsg, 0, 0
 		}
-		// Goja errors have "at <eval>:line:col" in the second line
 		matches = gojaErrLineRE.FindStringSubmatch(lines[1])
 		if matches == nil {
-			return errMsg, 0, 0
+			// Also try to match QuickJS stack: "at <eval>:line:col" from the wrapper
+			re := regexp.MustCompile(`at[^:]*:(\d+):\d+`)
+			for _, l := range lines {
+				if m := re.FindStringSubmatch(l); m != nil {
+					matches = []string{m[0], m[1], "0"}
+					break
+				}
+			}
+			if matches == nil {
+				return errMsg, 0, 0
+			}
 		}
 	}
 
 	jsLine, _ := strconv.Atoi(matches[1])
+	jsLine += lineOffset // adjust for try-catch wrapper
+	if jsLine < 1 {
+		jsLine = 1
+	}
 	_, _, tsLine, _, ok := mapper.Source(jsLine, 0)
 	if ok {
 		return fmt.Sprintf("%s\n  [TS line %d, JS line %d]", errMsg, tsLine, jsLine), jsLine, tsLine

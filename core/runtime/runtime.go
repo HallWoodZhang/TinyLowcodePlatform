@@ -21,7 +21,7 @@ func (e *QuickJSEngine) Run(tsCode string, resolver ScriptResolver, timeoutMs in
 	result := e.execute(jsCode)
 	// Map JS error line to TS if available
 	if result.Error != "" && mapper != nil {
-		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLine(result.Error, mapper)
+		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLineWithOffset(result.Error, mapper, -1)
 	}
 	return result
 }
@@ -38,7 +38,7 @@ func (e *QuickJSEngine) Debug(tsCode string, resolver ScriptResolver, bps []BpLi
 	result := e.execute(jsCode)
 	// Map error line
 	if result.Error != "" && mapper != nil {
-		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLine(result.Error, mapper)
+		result.Error, result.ErrorLine, result.ErrorTSLine = mapErrorLineWithOffset(result.Error, mapper, -1)
 	}
 	for i := range result.Breakpoints {
 		if mapper != nil {
