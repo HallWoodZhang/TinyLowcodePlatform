@@ -88,18 +88,42 @@ func (e *QuickJSEngine) execute(jsCode string) RunResult {
 		return ctx.Null()
 	}))
 
-	result, err := jsCtx.EvalFile(jsCode, qjs.EVAL_GLOBAL, "script.ts")
+	// Wrap in try-catch to capture Error.stack (QuickJS supports it)
+	wrappedCode := "try {\n" + jsCode + "\n} catch(__e) { console.log('__TRACE__:' + __e.toString() + '\\n' + (__e.stack || '')); }"
+
+	result, err := jsCtx.EvalFile(wrappedCode, qjs.EVAL_GLOBAL, "script.ts")
+	defer func() {
+		if result.IsObject() {
+			result.Free()
+		}
+	}()
+
+	outStr := output.String()
+
+	// Check for caught exception in console output
+	if idx := strings.Index(outStr, "__TRACE__:"); idx >= 0 {
+		trace := strings.TrimSpace(outStr[idx+len("__TRACE__:"):])
+		cleanOutput := strings.TrimSpace(outStr[:idx])
+		if cleanOutput == "" {
+			cleanOutput = "(no output before error)"
+		}
+		return RunResult{
+			Output: cleanOutput,
+			Error:  "Runtime error:\n" + trace,
+		}
+	}
+
+	// If EvalFile itself returned an error (syntax error etc.)
 	if err != nil {
 		return RunResult{
-			Output: output.String(),
+			Output: outStr,
 			Error:  "Runtime error:\n" + err.Error(),
 		}
 	}
-	defer result.Free()
 
 	runResult := RunResult{}
 	if output.Len() > 0 {
-		runResult.Output = output.String()
+		runResult.Output = outStr
 	} else if result.IsUndefined() {
 		runResult.Output = "undefined"
 	} else {
