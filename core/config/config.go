@@ -14,6 +14,12 @@ type Config struct {
 	JWTSecret        []byte     `json:"jwt_secret,omitempty"`
 	TokenExpireHours int        `json:"token_expire_hours,omitempty"`
 	RedisAddr        string     `json:"redis_addr,omitempty"`
+	RedisPassword    string     `json:"redis_password,omitempty"`
+	RedisDB          int        `json:"redis_db,omitempty"`
+	DBDriver         string     `json:"db_driver,omitempty"`
+	SQLitePath       string     `json:"sqlite_path,omitempty"`
+	MySQLDSN         string     `json:"mysql_dsn,omitempty"`
+	PostgresDSN      string     `json:"postgres_dsn,omitempty"`
 }
 
 type LogConfig struct {

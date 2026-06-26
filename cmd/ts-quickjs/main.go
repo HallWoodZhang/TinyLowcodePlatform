@@ -83,7 +83,7 @@ func main() {
 	fileServer := http.FileServer(http.FS(staticFS))
 	mux.Handle("GET /ts-quickjs/ui/", http.StripPrefix("/ts-quickjs/ui", fileServer))
 
-	blacklist := auth.NewBlacklist(cfg.RedisAddr, "", 0)
+	blacklist := auth.NewBlacklist(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 	authMW := auth.AuthMiddleware(secret, blacklist)
 	bpMW := auth.BetamapMiddleware(store, "script_debug")
 

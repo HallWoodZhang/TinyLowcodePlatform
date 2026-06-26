@@ -51,7 +51,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	blacklist := auth.NewBlacklist(cfg.RedisAddr, "", 0)
+	blacklist := auth.NewBlacklist(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 	authMW := auth.AuthMiddleware(secret, blacklist)
 	adminMW := auth.AdminMiddleware()
 

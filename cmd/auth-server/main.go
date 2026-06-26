@@ -58,7 +58,7 @@ func main() {
 		expireHours = 1
 	}
 
-	blacklist := auth.NewBlacklist(cfg.RedisAddr, "", 0)
+	blacklist := auth.NewBlacklist(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 
 	h := &authpkg.AuthHandler{
 		Store:       store,

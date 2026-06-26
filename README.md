@@ -137,14 +137,20 @@ make cover && open coverage.html                    # 覆盖率
 
 | 配置项 | 环境变量 | 默认值 | 说明 |
 |--------|----------|--------|------|
-| `host` | `*_HOST` | `127.0.0.1` | 监听地址 |
-| `port` | `*_PORT` | 见服务端口 | 监听端口 |
-| `jwt_secret` | — | 自动生成 | 32 字节随机密钥 |
+| `host` | `{SVC}_HOST` | `127.0.0.1` | 监听地址 |
+| `port` | `{SVC}_PORT` | 见端口表 | 监听端口 |
+| `jwt_secret` | — | `""` (自动生成) | JWT 签名密钥，所有服务必须一致 |
 | `token_expire_hours` | — | `1` | Token 过期时间 |
-| `redis_addr` | — | `""` | Redis 地址 (空=禁用黑名单) |
-| `engine` | — | `quickjs` | JS 引擎 (quickjs / goja) |
+| `engine` | — | `quickjs` | JS 引擎 (quickjs / goja)，仅 ts-quickjs |
+| `redis_addr` | — | `""` | Redis 地址，空=禁用 token 黑名单 |
+| `redis_password` | — | `""` | Redis 密码 |
+| `redis_db` | — | `0` | Redis DB 编号 |
+| `db_driver` | — | `sqlite` | 目标数据库驱动 (sql-runner)，可选 mysql/postgres |
+| `sqlite_path` | — | `scripts.db` | SQLite 数据库文件路径 |
+| `mysql_dsn` | — | `""` | MySQL DSN |
+| `postgres_dsn` | — | `""` | PostgreSQL DSN |
 
-优先级: 环境变量 > config.json > 默认值
+> 环境变量名: `{SVC}_HOST` / `{SVC}_PORT` = `AUTH_HOST`/`AUTH_PORT`, `TS_HOST`/`TS_PORT` 等。
 
 ### 跨平台构建
 

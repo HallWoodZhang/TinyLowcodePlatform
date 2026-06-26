@@ -28,7 +28,7 @@ func main() {
 	}
 	cfgPath := filepath.Join(home, "cmd/sql-runner/conf/config.json")
 	logDir := filepath.Join(home, "cmd/sql-runner/logs")
-	dbPath := filepath.Join(home, "scripts.db")
+	platformDB := filepath.Join(home, "scripts.db")
 
 	cfg := config.Load(cfgPath, "SQL_HOST", "SQL_PORT", "127.0.0.1", "9721")
 
@@ -42,7 +42,7 @@ func main() {
 	}
 	logs.DebugL.Info(context.Background(), "sql-runner starting, home=%s", home)
 
-	store, err := sqlite.New(dbPath)
+	store, err := sqlite.New(platformDB)
 	if err != nil {
 		logs.PanicL.Error(context.Background(), "failed to open database: %v", err)
 		log.Fatalf("failed to open database: %v", err)
@@ -54,7 +54,15 @@ func main() {
 		log.Fatal("jwt_secret must be configured (use same secret as auth-server)")
 	}
 
-	sqlH, err := sqlstore.New("sqlite", dbPath)
+	driver := cfg.DBDriver
+	if driver == "" {
+		driver = "sqlite"
+	}
+	sqlDSN := cfg.SQLitePath
+	if sqlDSN == "" {
+		sqlDSN = platformDB
+	}
+	sqlH, err := sqlstore.New(driver, sqlDSN)
 	if err != nil {
 		logs.PanicL.Error(context.Background(), "failed to open SQL store: %v", err)
 		log.Fatalf("failed to open SQL store: %v", err)
@@ -82,7 +90,7 @@ func main() {
 	fileServer := http.FileServer(http.FS(staticFS))
 	mux.Handle("GET /sql-runner/ui/", http.StripPrefix("/sql-runner/ui", fileServer))
 
-	blacklist := auth.NewBlacklist(cfg.RedisAddr, "", 0)
+	blacklist := auth.NewBlacklist(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 	authMW := auth.AuthMiddleware(secret, blacklist)
 	adminMW := auth.AdminMiddleware()
 	bpMW := auth.BetamapMiddleware(store, "sql_runner")
